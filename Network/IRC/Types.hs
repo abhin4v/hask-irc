@@ -4,8 +4,10 @@ import Control.Monad.Reader
 import System.IO
 import System.Time
 
-type Channel = String
-type Nick    = String
+type Channel     = String
+type Nick        = String
+type HandlerName = String
+type Handler     = BotConfig -> Message -> IO (Maybe Command)
 
 data User = Self | User { userNick :: Nick, userServer :: String }
             deriving (Show, Eq)
@@ -33,10 +35,12 @@ data Command =
   | JoinCmd
   deriving (Show, Eq)
 
-data Bot = Bot { server :: String
-               , port :: Int
-               , channel :: String
-               , botNick :: String
-               , socket :: Handle }
+data BotConfig = BotConfig { server :: String
+                           , port :: Int
+                           , channel :: String
+                           , botNick :: String
+                           , handlers :: [HandlerName] }
+                 deriving (Show, Eq)
+data Bot = Bot { botConfig :: BotConfig, socket :: Handle } deriving (Show, Eq)
 
 type IRC = ReaderT Bot IO

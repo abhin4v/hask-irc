@@ -8,8 +8,8 @@ import System.Time
 
 import Network.IRC.Types
 
-msgFromLine :: Bot -> ClockTime -> String -> Message
-msgFromLine (Bot { .. }) time line
+msgFromLine :: BotConfig -> ClockTime -> String -> Message
+msgFromLine (BotConfig { .. }) time line
   | "PING :" `isPrefixOf` line = Ping time . drop 6 $ line
   | otherwise = case command of
       "JOIN"    -> JoinMsg time user
@@ -35,8 +35,8 @@ msgFromLine (Bot { .. }) time line
     mode     = splits !! 3
     modeArgs = drop 4 splits
 
-lineFromCommand :: Bot -> Command -> String
-lineFromCommand (Bot { .. }) reply = case reply of
+lineFromCommand :: BotConfig -> Command -> String
+lineFromCommand (BotConfig { .. }) reply = case reply of
   Pong { .. }                     -> "PONG :" ++ rmsg
   NickCmd                         -> "NICK " ++ botNick
   UserCmd                         -> "USER " ++ botNick ++ " 0 * :" ++ botNick
