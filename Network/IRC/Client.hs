@@ -8,7 +8,7 @@ import Control.Exception
 import Control.Concurrent
 import Control.Monad.Reader
 import Network
-import Prelude hiding (log)
+import Prelude hiding (log, catch)
 import System.IO
 import System.Time
 import System.Timeout
@@ -25,7 +25,7 @@ oneSec = 1000000
 
 io = liftIO
 
-log msg = putStrLn $ "** " ++ msg
+log msg = getClockTime >>= \t -> printf "[%s] ** %s\n" (show t) msg
 
 sendCommand :: Bot -> Command -> IO ()
 sendCommand Bot { .. } reply = do
@@ -91,7 +91,7 @@ run :: BotConfig -> IO ()
 run botConfig = withSocketsDo $ do
   status <- run_
   case status of
-    Disconnected -> log "Connection timedout" >> run botConfig
+    Disconnected -> log "Connection timed out" >> run botConfig
     Errored      -> return ()
   where
     run_ = bracket (connect botConfig) disconnect $ \bot ->

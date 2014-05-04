@@ -13,7 +13,7 @@ import Network.IRC.Types
 (++) = append
 
 handleMessage :: HandlerName -> Handler
-handleMessage "greeter" = greeter
+handleMessage "greeter"  = greeter
 handleMessage "welcomer" = welcomer
 
 greeter bot ChannelMsg { .. } = case L.find (== clean msg) greetings of

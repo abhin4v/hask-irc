@@ -1,4 +1,4 @@
-module Network.IRC.Main(main) where
+module Main(main) where
 
 import qualified Data.Text as T
 
@@ -21,4 +21,4 @@ main = do
 
   if length args < 4
     then putStrLn ("Usage: " ++ prog ++ " <server> <port> <channel> <nick>") >> exitFailure
-    else run $ BotConfig server port channel botNick 120 handlers
+    else run $ BotConfig server port channel botNick 180 handlers
