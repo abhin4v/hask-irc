@@ -22,6 +22,7 @@ data Message =
   | NickMsg    { time :: ClockTime, user :: User, nick :: String }
   | QuitMsg    { time :: ClockTime, user :: User, msg :: String }
   | PartMsg    { time :: ClockTime, user :: User, msg :: String }
+  | KickMsg    { time :: ClockTime, user :: User, msg :: String }
   | OtherMsg   { time :: ClockTime, source :: String, command :: String
                , target :: String, msg :: String }
   deriving (Show, Eq)
@@ -39,6 +40,7 @@ data BotConfig = BotConfig { server :: String
                            , port :: Int
                            , channel :: String
                            , botNick :: String
+                           , botTimeout :: Int
                            , handlers :: [HandlerName] }
                  deriving (Show, Eq)
 data Bot = Bot { botConfig :: BotConfig, socket :: Handle } deriving (Show, Eq)

@@ -15,6 +15,7 @@ msgFromLine (BotConfig { .. }) time line
       "JOIN"    -> JoinMsg time user
       "QUIT"    -> QuitMsg time user message
       "PART"    -> PartMsg time user message
+      "KICK"    -> KickMsg time user kickReason
       "MODE"    -> if source == botNick
         then ModeMsg time Self target message []
         else ModeMsg time user target mode modeArgs
@@ -24,16 +25,17 @@ msgFromLine (BotConfig { .. }) time line
         else PrivMsg time user message
       _         -> OtherMsg time source command target message
   where
-    isSpc    = (== ' ')
-    isNotSpc = not . isSpc
-    splits   = splitWhen isSpc line
-    source   = drop 1 . takeWhile isNotSpc $ line
-    target   = splits !! 2
-    command  = splits !! 1
-    message  = drop 1 . unwords . drop 3 $ splits
-    user     = let u = splitWhen (== '!') source in User (u !! 0) (u !! 1)
-    mode     = splits !! 3
-    modeArgs = drop 4 splits
+    isSpc      = (== ' ')
+    isNotSpc   = not . isSpc
+    splits     = splitWhen isSpc line
+    source     = drop 1 . takeWhile isNotSpc $ line
+    target     = splits !! 2
+    command    = splits !! 1
+    message    = drop 1 . unwords . drop 3 $ splits
+    user       = let u = splitWhen (== '!') source in User (u !! 0) (u !! 1)
+    mode       = splits !! 3
+    modeArgs   = drop 4 splits
+    kickReason = drop 1 . unwords . drop 4 $ splits
 
 lineFromCommand :: BotConfig -> Command -> String
 lineFromCommand (BotConfig { .. }) reply = case reply of

@@ -19,5 +19,4 @@ main = do
 
   if length args < 4
     then putStrLn ("Usage: " ++ prog ++ " <server> <port> <channel> <nick>") >> exitFailure
-    else run $ BotConfig server port channel botNick handlers
-
+    else run $ BotConfig server port channel botNick 120 handlers

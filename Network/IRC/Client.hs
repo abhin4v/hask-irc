@@ -2,62 +2,102 @@
 
 module Network.IRC.Client(run) where
 
-import qualified Control.Exception as E
+import Control.Exception
 import Control.Concurrent
 import Control.Monad.Reader
 import Network
+import Prelude hiding (log)
 import System.IO
 import System.Time
+import System.Timeout
 import Text.Printf
 
 import Network.IRC.Handlers
 import Network.IRC.Protocol
 import Network.IRC.Types
 
+data Status = Connected | Disconnected | Joined | Kicked | Errored
+              deriving (Show, Eq)
+
+oneSec = 1000000
+
 io = liftIO
+
+log msg = putStrLn $ "** " ++ msg
 
 sendCommand :: Bot -> Command -> IO ()
 sendCommand Bot{ .. } reply = do
   let line = lineFromCommand botConfig reply
   hPrintf socket "%s\r\n" line >> printf "> %s\n" line
 
-listen :: IRC ()
-listen = forever $ do
+listen :: Status -> IRC Status
+listen status = do
   bot@Bot{ .. } <- ask
+  let nick  = botNick botConfig
 
-  line <- fmap init $ io $ hGetLine socket
-  time <- io getClockTime
+  when (status == Kicked) $
+    io $ threadDelay (5 * oneSec) >> sendCommand bot JoinCmd
 
-  io $ printf "[%s] %s\n" (show time) line
+  mLine <- io . timeout (oneSec * botTimeout botConfig) . hGetLine $ socket
+  case mLine of
+    Nothing -> return Disconnected
+    Just l -> do
+      let line = init l
+      time <- io getClockTime
 
-  io $ forkIO $ case msgFromLine botConfig time line of
-    Ping { .. }                 -> sendCommand bot $ Pong msg
-    ModeMsg { user = Self, .. } -> sendCommand bot JoinCmd
-    msg                         -> forM_ (handlers botConfig) $ \handler -> do
-      cmd <- handleMessage handler botConfig msg
-      case cmd of
-        Nothing  -> return ()
-        Just cmd -> sendCommand bot cmd
+      io $ printf "[%s] %s\n" (show time) line
+
+      let message = msgFromLine botConfig time line
+      nStatus <- io $ case message of
+        JoinMsg { .. } | userNick user == nick -> log "Joined" >> return Joined
+        KickMsg { .. }                         -> log "Kicked" >> return Kicked
+        _                                      -> do
+          forkIO $ case message of
+            Ping { .. }                 -> sendCommand bot $ Pong msg
+            ModeMsg { user = Self, .. } -> sendCommand bot JoinCmd
+            msg                         -> forM_ (handlers botConfig) $ \handler -> do
+              cmd <- handleMessage handler botConfig msg
+              case cmd of
+                Nothing  -> return ()
+                Just cmd -> sendCommand bot cmd
+          return status
+
+      listen nStatus
 
 connect :: BotConfig -> IO Bot
 connect botConfig@BotConfig{ .. } = do
-  putStrLn "** Connecting ..."
-  handle <- connectTo server (PortNumber (fromIntegral port))
+  log "Connecting ..."
+  handle <- connectToWithRetry
   hSetBuffering handle LineBuffering
   hSetBuffering stdout LineBuffering
-  putStrLn "** Connected"
+  log "Connected"
   return $ Bot botConfig handle
+  where
+    connectToWithRetry = connectTo server (PortNumber (fromIntegral port))
+                           `catch` (\(e :: SomeException) -> do
+                                      log ("Error: " ++ show e ++ ". Waiting.")
+                                      threadDelay (5 * oneSec)
+                                      connectToWithRetry)
 
 disconnect :: Bot -> IO ()
 disconnect bot = do
-  putStrLn "** Disconnecting ..."
+  log "Disconnecting ..."
   hClose . socket $ bot
-  putStrLn "** Disconnected"
+  log "Disconnected"
 
 run :: BotConfig -> IO ()
-run botConfig = E.bracket (connect botConfig) disconnect $ \bot ->
-  E.catch (run_ bot) (\(e :: E.SomeException) -> putStrLn $ "Exception! " ++ show e)
- where
-    run_ bot = do
-      sendCommand bot NickCmd >> sendCommand bot UserCmd
-      runReaderT listen bot
+run botConfig = withSocketsDo $ do
+  status <- run_
+  case status of
+    Disconnected -> log "Connection timedout" >> run botConfig
+    Errored      -> return ()
+  where
+    run_ = bracket (connect botConfig) disconnect $ \bot ->
+      go bot `catch` \(e :: SomeException) -> do
+        log $ "Exception! " ++ show e
+        return Errored
+
+    go bot = do
+      sendCommand bot NickCmd
+      sendCommand bot UserCmd
+      runReaderT (listen Connected) bot
