@@ -1,4 +1,4 @@
-module Main(main) where
+module Main (main) where
 
 import qualified Data.Text as T
 
