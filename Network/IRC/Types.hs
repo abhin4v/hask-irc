@@ -1,36 +1,37 @@
 module Network.IRC.Types where
 
 import Control.Monad.Reader
+import Data.Text (Text)
 import System.IO
 import System.Time
 
-type Channel     = String
-type Nick        = String
-type HandlerName = String
+type Channel     = Text
+type Nick        = Text
+type HandlerName = Text
 type Handler     = BotConfig -> Message -> IO (Maybe Command)
 
-data User = Self | User { userNick :: Nick, userServer :: String }
+data User = Self | User { userNick :: Nick, userServer :: Text }
             deriving (Show, Eq)
 
 data Message =
-    ChannelMsg { time :: ClockTime, user :: User, msg :: String }
-  | PrivMsg    { time :: ClockTime, user :: User, msg :: String }
-  | Ping       { time :: ClockTime, msg :: String }
+    ChannelMsg { time :: ClockTime, user :: User, msg :: Text }
+  | PrivMsg    { time :: ClockTime, user :: User, msg :: Text }
+  | Ping       { time :: ClockTime, msg :: Text }
   | JoinMsg    { time :: ClockTime, user :: User }
-  | ModeMsg    { time :: ClockTime, user :: User, target :: String
-               , mode :: String, modeArgs :: [String] }
-  | NickMsg    { time :: ClockTime, user :: User, nick :: String }
-  | QuitMsg    { time :: ClockTime, user :: User, msg :: String }
-  | PartMsg    { time :: ClockTime, user :: User, msg :: String }
-  | KickMsg    { time :: ClockTime, user :: User, msg :: String }
-  | OtherMsg   { time :: ClockTime, source :: String, command :: String
-               , target :: String, msg :: String }
+  | ModeMsg    { time :: ClockTime, user :: User, target :: Text
+               , mode :: Text, modeArgs :: [Text] }
+  | NickMsg    { time :: ClockTime, user :: User, nick :: Text }
+  | QuitMsg    { time :: ClockTime, user :: User, msg :: Text }
+  | PartMsg    { time :: ClockTime, user :: User, msg :: Text }
+  | KickMsg    { time :: ClockTime, user :: User, msg :: Text }
+  | OtherMsg   { time :: ClockTime, source :: Text, command :: Text
+               , target :: Text, msg :: Text }
   deriving (Show, Eq)
 
 data Command =
-    Pong            { rmsg :: String }
-  | ChannelMsgReply { rmsg :: String }
-  | PrivMsgReply    { ruser :: User, rmsg :: String }
+    Pong            { rmsg :: Text }
+  | ChannelMsgReply { rmsg :: Text }
+  | PrivMsgReply    { ruser :: User, rmsg :: Text }
   | NickCmd
   | UserCmd
   | JoinCmd
@@ -38,8 +39,8 @@ data Command =
 
 data BotConfig = BotConfig { server :: String
                            , port :: Int
-                           , channel :: String
-                           , botNick :: String
+                           , channel :: Text
+                           , botNick :: Text
                            , botTimeout :: Int
                            , handlers :: [HandlerName] }
                  deriving (Show, Eq)

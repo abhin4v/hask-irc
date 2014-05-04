@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards, ScopedTypeVariables #-}
 
-module Network.IRC.Client(run) where
+module Network.IRC.Client (run) where
+
+import qualified Data.Text as T
 
 import Control.Exception
 import Control.Concurrent
@@ -26,13 +28,13 @@ io = liftIO
 log msg = putStrLn $ "** " ++ msg
 
 sendCommand :: Bot -> Command -> IO ()
-sendCommand Bot{ .. } reply = do
-  let line = lineFromCommand botConfig reply
+sendCommand Bot { .. } reply = do
+  let line = T.unpack $ lineFromCommand botConfig reply
   hPrintf socket "%s\r\n" line >> printf "> %s\n" line
 
 listen :: Status -> IRC Status
 listen status = do
-  bot@Bot{ .. } <- ask
+  bot@Bot { .. } <- ask
   let nick  = botNick botConfig
 
   when (status == Kicked) $
@@ -47,7 +49,7 @@ listen status = do
 
       io $ printf "[%s] %s\n" (show time) line
 
-      let message = msgFromLine botConfig time line
+      let message = msgFromLine botConfig time (T.pack line)
       nStatus <- io $ case message of
         JoinMsg { .. } | userNick user == nick -> log "Joined" >> return Joined
         KickMsg { .. }                         -> log "Kicked" >> return Kicked
@@ -65,7 +67,7 @@ listen status = do
       listen nStatus
 
 connect :: BotConfig -> IO Bot
-connect botConfig@BotConfig{ .. } = do
+connect botConfig@BotConfig { .. } = do
   log "Connecting ..."
   handle <- connectToWithRetry
   hSetBuffering handle LineBuffering

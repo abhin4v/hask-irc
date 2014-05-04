@@ -1,14 +1,18 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 
-module Network.IRC.Protocol where
+module Network.IRC.Protocol (msgFromLine, lineFromCommand) where
 
-import Data.List
-import Data.List.Split
+import qualified Data.List as L
+
+import Data.Text
+import Prelude hiding (drop, unwords, takeWhile, (++))
 import System.Time
 
 import Network.IRC.Types
 
-msgFromLine :: BotConfig -> ClockTime -> String -> Message
+(++) = append
+
+msgFromLine :: BotConfig -> ClockTime -> Text -> Message
 msgFromLine (BotConfig { .. }) time line
   | "PING :" `isPrefixOf` line = Ping time . drop 6 $ line
   | otherwise = case command of
@@ -27,17 +31,17 @@ msgFromLine (BotConfig { .. }) time line
   where
     isSpc      = (== ' ')
     isNotSpc   = not . isSpc
-    splits     = splitWhen isSpc line
+    splits     = split isSpc line
     source     = drop 1 . takeWhile isNotSpc $ line
     target     = splits !! 2
     command    = splits !! 1
-    message    = drop 1 . unwords . drop 3 $ splits
-    user       = let u = splitWhen (== '!') source in User (u !! 0) (u !! 1)
+    message    = drop 1 . unwords . L.drop 3 $ splits
+    user       = let u = split (== '!') source in User (u !! 0) (u !! 1)
     mode       = splits !! 3
-    modeArgs   = drop 4 splits
-    kickReason = drop 1 . unwords . drop 4 $ splits
+    modeArgs   = L.drop 4 splits
+    kickReason = drop 1 . unwords . L.drop 4 $ splits
 
-lineFromCommand :: BotConfig -> Command -> String
+lineFromCommand :: BotConfig -> Command -> Text
 lineFromCommand (BotConfig { .. }) reply = case reply of
   Pong { .. }                     -> "PONG :" ++ rmsg
   NickCmd                         -> "NICK " ++ botNick

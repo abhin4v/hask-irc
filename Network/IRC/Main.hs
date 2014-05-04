@@ -1,5 +1,7 @@
 module Network.IRC.Main(main) where
 
+import qualified Data.Text as T
+
 import System.Environment
 import System.Exit
 
@@ -13,9 +15,9 @@ main = do
 
   let server   = args !! 0
   let port     = read (args !! 1)
-  let channel  = args !! 2
-  let botNick  = args !! 3
-  let handlers = ["greeter", "welcomer"]
+  let channel  = T.pack $ args !! 2
+  let botNick  = T.pack $ args !! 3
+  let handlers = map T.pack ["greeter", "welcomer"]
 
   if length args < 4
     then putStrLn ("Usage: " ++ prog ++ " <server> <port> <channel> <nick>") >> exitFailure
