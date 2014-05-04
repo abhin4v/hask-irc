@@ -7,14 +7,16 @@ import qualified Data.List as L
 import Data.Text
 import Prelude hiding ((++))
 
-import Network.IRC.Protocol
+import Network.IRC.Handlers.SongSearch
 import Network.IRC.Types
 
+clean = toLower . strip
 (++) = append
 
 handleMessage :: HandlerName -> Handler
-handleMessage "greeter"  = greeter
-handleMessage "welcomer" = welcomer
+handleMessage "greeter"    = greeter
+handleMessage "welcomer"   = welcomer
+handleMessage "songsearch" = songSearch
 
 greeter bot ChannelMsg { .. } = case L.find (== clean msg) greetings of
     Nothing       -> return Nothing
@@ -24,7 +26,6 @@ greeter bot ChannelMsg { .. } = case L.find (== clean msg) greetings of
                 , "good morning", "good evening", "good night"
                 , "ohayo", "oyasumi"]
 
-    clean = toLower . strip
 greeter _ _ = return Nothing
 
 welcomer bot@BotConfig { .. } JoinMsg { .. }

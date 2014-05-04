@@ -1,0 +1,9 @@
+server = "irc.freenode.net"
+port = 6667
+channel = "#testtesttest"
+nick = "haskman"
+handlers = ["greeter", "welcomer"]
+
+songsearch {
+  tinysong_apikey = "xxxyyyzzz"
+}

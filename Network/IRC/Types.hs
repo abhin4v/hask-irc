@@ -1,6 +1,9 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Network.IRC.Types where
 
 import Control.Monad.Reader
+import Data.Configurator.Types
 import Data.Text (Text)
 import System.IO
 import System.Time
@@ -40,8 +43,17 @@ data BotConfig = BotConfig { server     :: String
                            , channel    :: Text
                            , botNick    :: Text
                            , botTimeout :: Int
-                           , handlers   :: [HandlerName] }
-                 deriving (Show, Eq)
-data Bot = Bot { botConfig :: BotConfig, socket :: Handle } deriving (Show, Eq)
+                           , handlers   :: [HandlerName]
+                           , config     :: Config }
+
+instance Show BotConfig where
+  show BotConfig { .. } = "server = " ++ show server ++ "\n" ++
+                          "port = " ++ show port ++ "\n" ++
+                          "channel = " ++ show channel ++ "\n" ++
+                          "nick = " ++ show botNick ++ "\n" ++
+                          "timeout = " ++ show botTimeout ++ "\n" ++
+                          "handlers = " ++ show handlers ++ "\n"
+
+data Bot = Bot { botConfig :: BotConfig, socket :: Handle } deriving (Show)
 
 type IRC = ReaderT Bot IO

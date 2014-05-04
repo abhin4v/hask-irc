@@ -89,6 +89,8 @@ disconnect bot = do
 
 run :: BotConfig -> IO ()
 run botConfig = withSocketsDo $ do
+  log "Running with config:"
+  print botConfig
   status <- run_
   case status of
     Disconnected -> log "Connection timed out" >> run botConfig
