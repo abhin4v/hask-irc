@@ -1,26 +1,26 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, ScopedTypeVariables, BangPatterns #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings, ScopedTypeVariables #-}
 
 module Network.IRC.Handlers.SongSearch (songSearch) where
-
-import qualified Data.Configurator as C
 
 import Control.Applicative
 import Control.Exception
 import Control.Monad
+import Control.Monad.Trans
 import Data.Aeson
 import Data.Aeson.Types (emptyArray)
+import Data.Configurator
 import Data.Text
 import Data.Text.IO
 import Network.Curl.Aeson
 import Network.HTTP.Base
-import Prelude hiding (putStrLn, drop)
+import Prelude hiding (putStrLn, drop, lookup)
 
 import Network.IRC.Types
 
 (+++) = append
 
 data Song = NoSong | Song { url :: Text, name :: Text, artist :: Text }
-            deriving (Show)
+            deriving (Show, Eq)
 
 instance FromJSON Song where
     parseJSON (Object o)          = Song <$> o .: "Url" <*> o .: "SongName" <*> o .: "ArtistName"
@@ -28,18 +28,21 @@ instance FromJSON Song where
     parseJSON _                   = mzero
 
 songSearch bot@BotConfig { .. } ChannelMsg { .. }
-  | "!m " `isPrefixOf` msg = do
+  | "!m " `isPrefixOf` msg = liftIO $ do
       let query = strip . drop 3 $ msg
-      apiKey <- C.require config "songsearch.tinysong_apikey"
-      let apiUrl = "http://tinysong.com/b/" ++ urlEncode (unpack query)
-                    ++ "?format=json&key=" ++ apiKey
+      mApiKey <- lookup config "songsearch.tinysong_apikey"
+      fmap (Just . ChannelMsgReply) $ case mApiKey of
+        Nothing     -> -- do log "tinysong api key not found in config"
+          return $ "Error while searching for " +++ query
+        Just apiKey -> do
+          let apiUrl = "http://tinysong.com/b/" ++ urlEncode (unpack query)
+                        ++ "?format=json&key=" ++ apiKey
 
-      result <- try $ curlAesonGet apiUrl >>= evaluate
-
-      return . Just . ChannelMsgReply $ case result of
-        Left (_ :: CurlAesonException) -> "Error while searching for " +++ query
-        Right song                     -> case song of
-          Song { .. } -> "Listen to " +++ artist +++ " - " +++ name +++ " at " +++ url
-          NoSong      -> "No song found for: " +++ query
+          result <- try $ curlAesonGet apiUrl >>= evaluate
+          return $ case result of
+            Left (_ :: CurlAesonException) -> "Error while searching for " +++ query
+            Right song                     -> case song of
+              Song { .. } -> "Listen to " +++ artist +++ " - " +++ name +++ " at " +++ url
+              NoSong      -> "No song found for: " +++ query
   | otherwise = return Nothing
 songSearch _ _ = return Nothing

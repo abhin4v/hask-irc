@@ -1,9 +1,11 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, DeriveDataTypeable, RankNTypes, GeneralizedNewtypeDeriving #-}
 
 module Network.IRC.Types where
 
 import Control.Monad.Reader
+import Control.Monad.State
 import Data.Configurator.Types
+import Data.Dynamic
 import Data.Text (Text)
 import System.IO
 import System.Time
@@ -11,7 +13,10 @@ import System.Time
 type Channel     = Text
 type Nick        = Text
 type HandlerName = Text
-type Handler     = BotConfig -> Message -> IO (Maybe Command)
+
+newtype Handler = Handler {
+  runHandler :: forall m . (MonadIO m) => BotConfig -> Message -> m (Maybe Command)
+}
 
 data User = Self | User { userNick :: Nick, userServer :: Text }
             deriving (Show, Eq)
@@ -56,4 +61,12 @@ instance Show BotConfig where
 
 data Bot = Bot { botConfig :: BotConfig, socket :: Handle } deriving (Show)
 
-type IRC = ReaderT Bot IO
+data BotStatus = Connected | Disconnected | Joined | Kicked | Errored
+                 deriving (Show, Eq)
+
+newtype IRC a = IRC { _runIRC :: StateT BotStatus (ReaderT Bot IO) a }
+                deriving (Functor, Monad, MonadIO, MonadReader Bot, MonadState BotStatus)
+
+runIRC :: Bot -> BotStatus -> IRC a -> IO BotStatus
+runIRC bot botStatus irc =
+  fmap snd $ runReaderT (runStateT (_runIRC irc) Connected) bot
