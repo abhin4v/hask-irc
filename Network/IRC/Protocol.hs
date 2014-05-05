@@ -19,7 +19,7 @@ msgFromLine (BotConfig { .. }) time line
       "JOIN"    -> JoinMsg time user
       "QUIT"    -> QuitMsg time user message
       "PART"    -> PartMsg time user message
-      "KICK"    -> KickMsg time user kickReason
+      "KICK"    -> KickMsg time user kicked kickReason
       "MODE"    -> if source == botNick
         then ModeMsg time Self target message []
         else ModeMsg time user target mode modeArgs
@@ -39,6 +39,7 @@ msgFromLine (BotConfig { .. }) time line
     user       = let u = split (== '!') source in User (u !! 0) (u !! 1)
     mode       = splits !! 3
     modeArgs   = L.drop 4 splits
+    kicked     = splits !! 3
     kickReason = drop 1 . unwords . L.drop 4 $ splits
 
 lineFromCommand :: BotConfig -> Command -> Text

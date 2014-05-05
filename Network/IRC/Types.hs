@@ -30,7 +30,7 @@ data Message =
   | NickMsg    { time :: ClockTime, user   :: User, nick    :: Text }
   | QuitMsg    { time :: ClockTime, user   :: User, msg     :: Text }
   | PartMsg    { time :: ClockTime, user   :: User, msg     :: Text }
-  | KickMsg    { time :: ClockTime, user   :: User, msg     :: Text }
+  | KickMsg    { time :: ClockTime, user   :: User, kicked  :: Text , msg    :: Text }
   | OtherMsg   { time :: ClockTime, source :: Text, command :: Text , target :: Text, msg      :: Text }
   deriving (Show, Eq)
 

@@ -49,7 +49,7 @@ listen = do
         let message = msgFromLine botConfig time (T.pack line)
         case message of
           JoinMsg { .. } | userNick user == nick -> log "Joined" >> return Joined
-          KickMsg { .. }                         -> log "Kicked" >> return Kicked
+          KickMsg { .. } | kicked == nick        -> log "Kicked" >> return Kicked
           _                                      -> do
             forkIO $ case message of
               Ping { .. }                 -> sendCommand bot $ Pong msg
