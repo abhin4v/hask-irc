@@ -1,11 +1,10 @@
-{-# LANGUAGE RecordWildCards, DeriveDataTypeable, RankNTypes, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards, RankNTypes, GeneralizedNewtypeDeriving #-}
 
 module Network.IRC.Types where
 
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Configurator.Types
-import Data.Dynamic
 import Data.Text (Text)
 import System.IO
 import System.Time
@@ -68,5 +67,4 @@ newtype IRC a = IRC { _runIRC :: StateT BotStatus (ReaderT Bot IO) a }
                 deriving (Functor, Monad, MonadIO, MonadReader Bot, MonadState BotStatus)
 
 runIRC :: Bot -> BotStatus -> IRC a -> IO BotStatus
-runIRC bot botStatus irc =
-  fmap snd $ runReaderT (runStateT (_runIRC irc) Connected) bot
+runIRC bot botStatus = flip runReaderT bot . flip execStateT botStatus . _runIRC

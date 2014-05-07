@@ -10,8 +10,6 @@ import System.Time
 
 import Network.IRC.Types
 
-(++) = append
-
 msgFromLine :: BotConfig -> ClockTime -> Text -> Message
 msgFromLine (BotConfig { .. }) time line
   | "PING :" `isPrefixOf` line = Ping time . drop 6 $ line
@@ -50,3 +48,5 @@ lineFromCommand (BotConfig { .. }) reply = case reply of
   JoinCmd                         -> "JOIN " ++ channel
   ChannelMsgReply { .. }          -> "PRIVMSG " ++ channel ++ " :" ++ rmsg
   PrivMsgReply (User { .. }) rmsg -> "PRIVMSG " ++ botNick ++ " :" ++ rmsg
+  where
+    (++) = append

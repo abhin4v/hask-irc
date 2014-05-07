@@ -10,14 +10,11 @@ import Data.Aeson
 import Data.Aeson.Types (emptyArray)
 import Data.Configurator
 import Data.Text
-import Data.Text.IO
 import Network.Curl.Aeson
 import Network.HTTP.Base
 import Prelude hiding (putStrLn, drop, lookup)
 
 import Network.IRC.Types
-
-(+++) = append
 
 data Song = NoSong | Song { url :: Text, name :: Text, artist :: Text }
             deriving (Show, Eq)
@@ -27,7 +24,8 @@ instance FromJSON Song where
     parseJSON a | a == emptyArray = return NoSong
     parseJSON _                   = mzero
 
-songSearch bot@BotConfig { .. } ChannelMsg { .. }
+songSearch :: MonadIO m => BotConfig -> Message -> m (Maybe Command)
+songSearch BotConfig { .. } ChannelMsg { .. }
   | "!m " `isPrefixOf` msg = liftIO $ do
       let query = strip . drop 3 $ msg
       mApiKey <- lookup config "songsearch.tinysong_apikey"
@@ -45,4 +43,6 @@ songSearch bot@BotConfig { .. } ChannelMsg { .. }
               Song { .. } -> "Listen to " +++ artist +++ " - " +++ name +++ " at " +++ url
               NoSong      -> "No song found for: " +++ query
   | otherwise = return Nothing
+  where
+    (+++) = append
 songSearch _ _ = return Nothing

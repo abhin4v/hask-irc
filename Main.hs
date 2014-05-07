@@ -12,7 +12,7 @@ import Data.Maybe
 import System.Environment
 import System.Exit
 
-import Network.IRC.Types
+import Network.IRC.Types (BotConfig(BotConfig))
 import Network.IRC.Client
 
 instance Configured a => Configured [a] where

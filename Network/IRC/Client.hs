@@ -10,7 +10,7 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
 import Network
-import Prelude hiding (log, catch)
+import Prelude hiding (log)
 import System.IO
 import System.Time
 import System.Timeout
@@ -20,8 +20,10 @@ import Network.IRC.Handlers
 import Network.IRC.Protocol
 import Network.IRC.Types
 
+oneSec :: Int
 oneSec = 1000000
 
+log :: String -> IO ()
 log msg = getClockTime >>= \t -> printf "[%s] ** %s\n" (show t) msg
 
 sendCommand :: Bot -> Command -> IO ()
@@ -43,10 +45,10 @@ listen = do
     case mLine of
       Nothing -> return Disconnected
       Just line -> do
-        time <- getClockTime
-        printf "[%s] %s\n" (show time) line
+        now <- getClockTime
+        printf "[%s] %s\n" (show now) line
 
-        let message = msgFromLine botConfig time (T.pack line)
+        let message = msgFromLine botConfig now (T.pack line)
         case message of
           JoinMsg { .. } | userNick user == nick -> log "Joined" >> return Joined
           KickMsg { .. } | kicked == nick        -> log "Kicked" >> return Kicked
@@ -54,11 +56,15 @@ listen = do
             forkIO $ case message of
               Ping { .. }                 -> sendCommand bot $ Pong msg
               ModeMsg { user = Self, .. } -> sendCommand bot JoinCmd
-              msg                         -> forM_ (handlers botConfig) $ \handler -> forkIO $ do
-                cmd <- runHandler (getHandler handler) botConfig msg
-                case cmd of
-                  Nothing  -> return ()
-                  Just cmd -> sendCommand bot cmd
+              msg                         -> forM_ (handlers botConfig) $ \handlerName -> forkIO $ do
+                let mHandler = getHandler handlerName
+                case mHandler of
+                  Nothing      -> log $ "No handler found with name: " ++ T.unpack handlerName
+                  Just handler -> do
+                    mCmd <- runHandler handler botConfig msg
+                    case mCmd of
+                      Nothing  -> return ()
+                      Just cmd -> sendCommand bot cmd
             return status
 
   put nStatus
@@ -67,11 +73,11 @@ listen = do
 connect :: BotConfig -> IO Bot
 connect botConfig@BotConfig { .. } = do
   log "Connecting ..."
-  handle <- connectToWithRetry
-  hSetBuffering handle LineBuffering
+  socket <- connectToWithRetry
+  hSetBuffering socket LineBuffering
   hSetBuffering stdout LineBuffering
   log "Connected"
-  return $ Bot botConfig handle
+  return $ Bot botConfig socket
   where
     connectToWithRetry = connectTo server (PortNumber (fromIntegral port))
                            `catch` (\(e :: SomeException) -> do
@@ -93,6 +99,7 @@ run botConfig = withSocketsDo $ do
   case status of
     Disconnected -> log "Connection timed out" >> run botConfig
     Errored      -> return ()
+    _            -> error "Unsupported status"
   where
     run_ = bracket (connect botConfig) disconnect $ \bot ->
       go bot `catch` \(e :: SomeException) -> do
