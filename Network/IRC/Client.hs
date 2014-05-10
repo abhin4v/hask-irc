@@ -2,17 +2,15 @@
 
 module Network.IRC.Client (run) where
 
-import qualified Data.Text as T
 import qualified Data.Text.Format as TF
 import qualified Data.Text.Format.Params as TF
 
-import BasicPrelude hiding (log)
+import ClassyPrelude hiding (log)
 import Control.Concurrent
-import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.Reader hiding (forM_)
+import Control.Monad.State hiding (forM_)
 import Network
-import System.IO
-import System.Time
+import System.IO (hSetBuffering, BufferMode(..))
 import System.Timeout
 
 import Network.IRC.Handlers
@@ -23,7 +21,7 @@ oneSec :: Int
 oneSec = 1000000
 
 log :: Text -> IO ()
-log msg = getClockTime >>= \t -> TF.print "[{}] ** {}\n" $ TF.buildParams (show t, msg)
+log msg = getCurrentTime >>= \t -> TF.print "[{}] ** {}\n" $ TF.buildParams (t, msg)
 
 sendCommand :: Bot -> Command -> IO ()
 sendCommand Bot { .. } reply = do
@@ -41,14 +39,14 @@ listen = do
     when (status == Kicked) $
       threadDelay (5 * oneSec) >> sendCommand bot JoinCmd
 
-    mLine <- fmap (fmap init) . timeout (oneSec * botTimeout botConfig) . hGetLine $ socket
+    mLine <- map (map initEx) . timeout (oneSec * botTimeout botConfig) . hGetLine $ socket
     case mLine of
       Nothing -> return Disconnected
       Just line -> do
-        now <- getClockTime
-        TF.print "[{}] {}\n" $ TF.buildParams (show now, line)
+        now <- getCurrentTime
+        TF.print "[{}] {}\n" $ TF.buildParams (now, line)
 
-        let message = msgFromLine botConfig now (T.pack line)
+        let message = msgFromLine botConfig now line
         case message of
           JoinMsg { .. } | userNick user == nick -> log "Joined" >> return Joined
           KickMsg { .. } | kicked == nick        -> log "Kicked" >> return Kicked
@@ -81,7 +79,7 @@ connect botConfig@BotConfig { .. } = do
   where
     connectToWithRetry = connectTo server (PortNumber (fromIntegral port))
                            `catch` (\(e :: SomeException) -> do
-                                      log ("Error: " ++ show e ++ ". Waiting.")
+                                      log ("Error while connecting: " ++ pack (show e) ++ ". Waiting.")
                                       threadDelay (5 * oneSec)
                                       connectToWithRetry)
 
@@ -103,7 +101,7 @@ run botConfig = withSocketsDo $ do
   where
     run_ = bracket (connect botConfig) disconnect $ \bot ->
       go bot `catch` \(e :: SomeException) -> do
-        log $ "Exception! " ++ show e
+        log $ "Exception! " ++ pack (show e)
         return Errored
 
     go bot = do

@@ -3,13 +3,10 @@
 
 module Network.IRC.Types where
 
-import BasicPrelude hiding (show)
+import ClassyPrelude
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Configurator.Types
-import Prelude (Show(..))
-import System.IO
-import System.Time
 
 type Channel     = Text
 type Nick        = Text
@@ -23,16 +20,16 @@ data User = Self | User { userNick :: Nick, userServer :: Text }
             deriving (Show, Eq)
 
 data Message =
-  ChannelMsg { time   :: ClockTime, user   :: User, msg     :: Text }
-  | PrivMsg    { time :: ClockTime, user   :: User, msg     :: Text }
-  | Ping       { time :: ClockTime, msg    :: Text }
-  | JoinMsg    { time :: ClockTime, user   :: User }
-  | ModeMsg    { time :: ClockTime, user   :: User, target  :: Text , mode   :: Text, modeArgs :: [Text] }
-  | NickMsg    { time :: ClockTime, user   :: User, nick    :: Text }
-  | QuitMsg    { time :: ClockTime, user   :: User, msg     :: Text }
-  | PartMsg    { time :: ClockTime, user   :: User, msg     :: Text }
-  | KickMsg    { time :: ClockTime, user   :: User, kicked  :: Text , msg    :: Text }
-  | OtherMsg   { time :: ClockTime, source :: Text, command :: Text , target :: Text, msg      :: Text }
+    ChannelMsg { time :: UTCTime, user   :: User, msg     :: Text }
+  | PrivMsg    { time :: UTCTime, user   :: User, msg     :: Text }
+  | Ping       { time :: UTCTime, msg    :: Text }
+  | JoinMsg    { time :: UTCTime, user   :: User }
+  | ModeMsg    { time :: UTCTime, user   :: User, target  :: Text , mode   :: Text, modeArgs :: [Text] }
+  | NickMsg    { time :: UTCTime, user   :: User, nick    :: Text }
+  | QuitMsg    { time :: UTCTime, user   :: User, msg     :: Text }
+  | PartMsg    { time :: UTCTime, user   :: User, msg     :: Text }
+  | KickMsg    { time :: UTCTime, user   :: User, kicked  :: Text , msg    :: Text }
+  | OtherMsg   { time :: UTCTime, source :: Text, command :: Text , target :: Text, msg      :: Text }
   deriving (Show, Eq)
 
 data Command =

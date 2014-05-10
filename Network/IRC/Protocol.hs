@@ -2,17 +2,15 @@
 
 module Network.IRC.Protocol (msgFromLine, lineFromCommand) where
 
-import qualified Data.List as L
-import qualified Data.Text as T
-
-import BasicPrelude
-import System.Time
+import ClassyPrelude
+import Data.List ((!!))
+import Data.Text (split)
 
 import Network.IRC.Types
 
-msgFromLine :: BotConfig -> ClockTime -> Text -> Message
+msgFromLine :: BotConfig -> UTCTime -> Text -> Message
 msgFromLine (BotConfig { .. }) time line
-  | "PING :" `T.isPrefixOf` line = Ping time . T.drop 6 $ line
+  | "PING :" `isPrefixOf` line = Ping time . drop 6 $ line
   | otherwise = case command of
       "JOIN"    -> JoinMsg time user
       "QUIT"    -> QuitMsg time user message
@@ -21,7 +19,7 @@ msgFromLine (BotConfig { .. }) time line
       "MODE"    -> if source == botNick
         then ModeMsg time Self target message []
         else ModeMsg time user target mode modeArgs
-      "NICK"    -> NickMsg time user (T.drop 1 target)
+      "NICK"    -> NickMsg time user (drop 1 target)
       "PRIVMSG" -> if target == channel
         then ChannelMsg time user message
         else PrivMsg time user message
@@ -29,16 +27,16 @@ msgFromLine (BotConfig { .. }) time line
   where
     isSpc      = (== ' ')
     isNotSpc   = not . isSpc
-    splits     = T.split isSpc line
-    source     = T.drop 1 . T.takeWhile isNotSpc $ line
+    splits     = split isSpc line
+    source     = drop 1 . takeWhile isNotSpc $ line
     target     = splits !! 2
     command    = splits !! 1
-    message    = T.drop 1 . unwords . L.drop 3 $ splits
-    user       = let u = T.split (== '!') source in User (u !! 0) (u !! 1)
+    message    = drop 1 . unwords . drop 3 $ splits
+    user       = let u = split (== '!') source in User (u !! 0) (u !! 1)
     mode       = splits !! 3
-    modeArgs   = L.drop 4 splits
+    modeArgs   = drop 4 splits
     kicked     = splits !! 3
-    kickReason = T.drop 1 . unwords . L.drop 4 $ splits
+    kickReason = drop 1 . unwords . drop 4 $ splits
 
 lineFromCommand :: BotConfig -> Command -> Text
 lineFromCommand (BotConfig { .. }) reply = case reply of

@@ -3,12 +3,12 @@
 module Network.IRC.Handlers.SongSearch (songSearch) where
 
 import qualified Data.Configurator as CF
-import qualified Data.Text as T
 
-import BasicPrelude hiding (try)
+import ClassyPrelude hiding (try)
 import Control.Exception
 import Data.Aeson
 import Data.Aeson.Types (emptyArray)
+import Data.Text (strip)
 import Network.Curl.Aeson
 import Network.HTTP.Base
 
@@ -20,18 +20,18 @@ data Song = NoSong | Song { url :: Text, name :: Text, artist :: Text }
 instance FromJSON Song where
     parseJSON (Object o)          = Song <$> o .: "Url" <*> o .: "SongName" <*> o .: "ArtistName"
     parseJSON a | a == emptyArray = return NoSong
-    parseJSON _                   = mzero
+    parseJSON _                   = mempty
 
 songSearch :: MonadIO m => BotConfig -> Message -> m (Maybe Command)
 songSearch BotConfig { .. } ChannelMsg { .. }
-  | "!m " `T.isPrefixOf` msg = liftIO $ do
-      let query = T.strip . T.drop 3 $ msg
+  | "!m " `isPrefixOf` msg = liftIO $ do
+      let query = strip . drop 3 $ msg
       mApiKey <- CF.lookup config "songsearch.tinysong_apikey"
-      fmap (Just . ChannelMsgReply) $ case mApiKey of
+      map (Just . ChannelMsgReply) $ case mApiKey of
         Nothing     -> -- do log "tinysong api key not found in config"
           return $ "Error while searching for " ++ query
         Just apiKey -> do
-          let apiUrl = "http://tinysong.com/b/" ++ urlEncode (T.unpack query)
+          let apiUrl = "http://tinysong.com/b/" ++ urlEncode (unpack query)
                         ++ "?format=json&key=" ++ apiKey
 
           result <- try $ curlAesonGet apiUrl >>= evaluate

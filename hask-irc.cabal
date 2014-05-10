@@ -50,9 +50,9 @@ cabal-version:       >=1.10
 
 library
   build-depends:       base >=4.5 && <4.7, text >=0.11 && <0.12, mtl >=2.1 && <2.2,
-                       network >=2.3 && <2.5, old-time >=1.1 && <1.2, configurator >= 0.2,
+                       network >=2.3 && <2.5, configurator >= 0.2, time >=1.4.0,
                        curl-aeson ==0.0.3, aeson >=0.6.0.0, HTTP, transformers >=0.3,
-                       basic-prelude ==0.3.8, text-format >= 0.3.1
+                       classy-prelude ==0.9.1, text-format >= 0.3.1
 
   exposed-modules:     Network.IRC.Types, Network.IRC.Protocol,
                        Network.IRC.Handlers, Network.IRC.Client
@@ -74,9 +74,9 @@ executable hask-irc
 
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.5 && <4.7, text >=0.11 && <0.12, mtl >=2.1 && <2.2,
-                       network >=2.3 && <2.5, old-time >=1.1 && <1.2, configurator >= 0.2,
+                       network >=2.3 && <2.5, configurator >= 0.2, time >=1.4.0,
                        curl-aeson ==0.0.3, aeson >=0.6.0.0, HTTP, transformers >=0.3,
-                       basic-prelude ==0.3.8, text-format >= 0.3.1
+                       classy-prelude ==0.9.1, text-format >= 0.3.1
 
   -- Directories containing source files.
   -- hs-source-dirs:

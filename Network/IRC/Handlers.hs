@@ -2,15 +2,14 @@
 
 module Network.IRC.Handlers (getHandler) where
 
-import qualified Data.Text as T
-
-import BasicPrelude
+import ClassyPrelude
+import Data.Text (strip)
 
 import Network.IRC.Handlers.SongSearch
 import Network.IRC.Types
 
 clean :: Text -> Text
-clean = T.toLower . T.strip
+clean = toLower . strip
 
 getHandler :: HandlerName -> Maybe Handler
 getHandler "greeter"    = Just $ Handler greeter

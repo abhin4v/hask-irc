@@ -3,9 +3,8 @@
 module Main (main) where
 
 import qualified Data.Configurator as CF
-import qualified Data.Text as T
 
-import BasicPrelude hiding (try, getArgs)
+import ClassyPrelude hiding (try, getArgs)
 import Control.Exception
 import Data.Configurator.Types
 import System.Environment
@@ -24,10 +23,10 @@ main = do
   prog <- getProgName
 
   when (length args < 1) $ do
-    putStrLn $ "Usage: " ++ T.pack prog ++ " <config file path>"
+    putStrLn $ "Usage: " ++ pack prog ++ " <config file path>"
     exitFailure
 
-  let configFile = head args
+  let configFile = headEx args
   loadBotConfig configFile >>= run
 
 loadBotConfig :: String -> IO BotConfig
@@ -46,5 +45,5 @@ loadBotConfig configFile = do
         return $ BotConfig server port channel botNick timeout handlers cfg
 
       case eBotConfig of
-        Left (KeyError k) -> error $ "Error while reading key from config: " ++ T.unpack k
+        Left (KeyError k) -> error $ "Error while reading key from config: " ++ unpack k
         Right botConfig   -> return botConfig
