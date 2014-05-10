@@ -1,11 +1,13 @@
 {-# LANGUAGE RecordWildCards, RankNTypes, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE  NoImplicitPrelude, OverloadedStrings #-}
 
 module Network.IRC.Types where
 
+import BasicPrelude hiding (show)
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Configurator.Types
-import Data.Text (Text)
+import Prelude (Show(..))
 import System.IO
 import System.Time
 

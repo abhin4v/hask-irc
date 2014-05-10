@@ -1,20 +1,16 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings, NoImplicitPrelude #-}
 
 module Network.IRC.Handlers (getHandler) where
 
-import qualified Data.List as L
+import qualified Data.Text as T
 
-import Data.Text
-import Prelude hiding ((++))
+import BasicPrelude
 
 import Network.IRC.Handlers.SongSearch
 import Network.IRC.Types
 
 clean :: Text -> Text
-clean = toLower . strip
-
-(++) :: Text -> Text -> Text
-(++) = append
+clean = T.toLower . T.strip
 
 getHandler :: HandlerName -> Maybe Handler
 getHandler "greeter"    = Just $ Handler greeter
@@ -23,7 +19,7 @@ getHandler "songsearch" = Just $ Handler songSearch
 getHandler _            = Nothing
 
 greeter :: Monad m => BotConfig -> Message -> m (Maybe Command)
-greeter _ ChannelMsg { .. } = case L.find (== clean msg) greetings of
+greeter _ ChannelMsg { .. } = case find (== clean msg) greetings of
     Nothing       -> return Nothing
     Just greeting -> return . Just . ChannelMsgReply $ greeting ++ " " ++ userNick user
   where

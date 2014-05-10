@@ -1,20 +1,19 @@
-{-# LANGUAGE RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards, ScopedTypeVariables, NoImplicitPrelude, OverloadedStrings #-}
 
 module Network.IRC.Client (run) where
 
 import qualified Data.Text as T
+import qualified Data.Text.Format as TF
+import qualified Data.Text.Format.Params as TF
 
-import Control.Exception
+import BasicPrelude hiding (log)
 import Control.Concurrent
-import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
 import Network
-import Prelude hiding (log)
 import System.IO
 import System.Time
 import System.Timeout
-import Text.Printf
 
 import Network.IRC.Handlers
 import Network.IRC.Protocol
@@ -23,13 +22,14 @@ import Network.IRC.Types
 oneSec :: Int
 oneSec = 1000000
 
-log :: String -> IO ()
-log msg = getClockTime >>= \t -> printf "[%s] ** %s\n" (show t) msg
+log :: Text -> IO ()
+log msg = getClockTime >>= \t -> TF.print "[{}] ** {}\n" $ TF.buildParams (show t, msg)
 
 sendCommand :: Bot -> Command -> IO ()
 sendCommand Bot { .. } reply = do
-  let line = T.unpack $ lineFromCommand botConfig reply
-  hPrintf socket "%s\r\n" line >> printf "> %s\n" line
+  let line = lineFromCommand botConfig reply
+  TF.hprint socket "{}\r\n" $ TF.Only line
+  TF.print "> {}\n" $ TF.Only line
 
 listen :: IRC ()
 listen = do
@@ -46,7 +46,7 @@ listen = do
       Nothing -> return Disconnected
       Just line -> do
         now <- getClockTime
-        printf "[%s] %s\n" (show now) line
+        TF.print "[{}] {}\n" $ TF.buildParams (show now, line)
 
         let message = msgFromLine botConfig now (T.pack line)
         case message of
@@ -59,7 +59,7 @@ listen = do
               msg                         -> forM_ (handlers botConfig) $ \handlerName -> forkIO $ do
                 let mHandler = getHandler handlerName
                 case mHandler of
-                  Nothing      -> log $ "No handler found with name: " ++ T.unpack handlerName
+                  Nothing      -> log $ "No handler found with name: " ++ handlerName
                   Just handler -> do
                     mCmd <- runHandler handler botConfig msg
                     case mCmd of

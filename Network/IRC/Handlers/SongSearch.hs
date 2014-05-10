@@ -1,18 +1,16 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings, ScopedTypeVariables, NoImplicitPrelude #-}
 
 module Network.IRC.Handlers.SongSearch (songSearch) where
 
-import Control.Applicative
+import qualified Data.Configurator as CF
+import qualified Data.Text as T
+
+import BasicPrelude hiding (try)
 import Control.Exception
-import Control.Monad
-import Control.Monad.Trans
 import Data.Aeson
 import Data.Aeson.Types (emptyArray)
-import Data.Configurator
-import Data.Text
 import Network.Curl.Aeson
 import Network.HTTP.Base
-import Prelude hiding (putStrLn, drop, lookup)
 
 import Network.IRC.Types
 
@@ -26,23 +24,21 @@ instance FromJSON Song where
 
 songSearch :: MonadIO m => BotConfig -> Message -> m (Maybe Command)
 songSearch BotConfig { .. } ChannelMsg { .. }
-  | "!m " `isPrefixOf` msg = liftIO $ do
-      let query = strip . drop 3 $ msg
-      mApiKey <- lookup config "songsearch.tinysong_apikey"
+  | "!m " `T.isPrefixOf` msg = liftIO $ do
+      let query = T.strip . T.drop 3 $ msg
+      mApiKey <- CF.lookup config "songsearch.tinysong_apikey"
       fmap (Just . ChannelMsgReply) $ case mApiKey of
         Nothing     -> -- do log "tinysong api key not found in config"
-          return $ "Error while searching for " +++ query
+          return $ "Error while searching for " ++ query
         Just apiKey -> do
-          let apiUrl = "http://tinysong.com/b/" ++ urlEncode (unpack query)
+          let apiUrl = "http://tinysong.com/b/" ++ urlEncode (T.unpack query)
                         ++ "?format=json&key=" ++ apiKey
 
           result <- try $ curlAesonGet apiUrl >>= evaluate
           return $ case result of
-            Left (_ :: CurlAesonException) -> "Error while searching for " +++ query
+            Left (_ :: CurlAesonException) -> "Error while searching for " ++ query
             Right song                     -> case song of
-              Song { .. } -> "Listen to " +++ artist +++ " - " +++ name +++ " at " +++ url
-              NoSong      -> "No song found for: " +++ query
+              Song { .. } -> "Listen to " ++ artist ++ " - " ++ name ++ " at " ++ url
+              NoSong      -> "No song found for: " ++ query
   | otherwise = return Nothing
-  where
-    (+++) = append
 songSearch _ _ = return Nothing

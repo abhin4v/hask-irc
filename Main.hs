@@ -1,14 +1,13 @@
-{-# LANGUAGE OverloadedStrings, OverlappingInstances #-}
+{-# LANGUAGE OverloadedStrings, OverlappingInstances, NoImplicitPrelude #-}
 
 module Main (main) where
 
+import qualified Data.Configurator as CF
 import qualified Data.Text as T
 
+import BasicPrelude hiding (try, getArgs)
 import Control.Exception
-import Control.Monad
-import Data.Configurator
 import Data.Configurator.Types
-import Data.Maybe
 import System.Environment
 import System.Exit
 
@@ -25,25 +24,25 @@ main = do
   prog <- getProgName
 
   when (length args < 1) $ do
-    putStrLn ("Usage: " ++ prog ++ " <config file path>")
+    putStrLn $ "Usage: " ++ T.pack prog ++ " <config file path>"
     exitFailure
 
   let configFile = head args
   loadBotConfig configFile >>= run
 
-loadBotConfig :: FilePath -> IO BotConfig
+loadBotConfig :: String -> IO BotConfig
 loadBotConfig configFile = do
-  eCfg <- try $ load [Required configFile]
+  eCfg <- try $ CF.load [Required configFile]
   case eCfg of
     Left (ParseError _ _) -> error "Error while loading config"
     Right cfg             -> do
       eBotConfig <- try $ do
-        server   <- require cfg "server"
-        port     <- require cfg "port"
-        channel  <- require cfg "channel"
-        botNick  <- require cfg "nick"
-        timeout  <- require cfg "timeout"
-        handlers <- require cfg "handlers"
+        server   <- CF.require cfg "server"
+        port     <- CF.require cfg "port"
+        channel  <- CF.require cfg "channel"
+        botNick  <- CF.require cfg "nick"
+        timeout  <- CF.require cfg "timeout"
+        handlers <- CF.require cfg "handlers"
         return $ BotConfig server port channel botNick timeout handlers cfg
 
       case eBotConfig of
