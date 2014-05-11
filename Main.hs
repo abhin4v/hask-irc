@@ -5,10 +5,12 @@ module Main (main) where
 import qualified Data.Configurator as CF
 
 import ClassyPrelude hiding (try, getArgs)
-import Control.Exception
+import Control.Concurrent.Lifted
+import Control.Exception.Lifted
 import Data.Configurator.Types
 import System.Environment
 import System.Exit
+import System.Posix.Signals
 
 import Network.IRC.Types (BotConfig(BotConfig))
 import Network.IRC.Client
@@ -25,6 +27,10 @@ main = do
   when (length args < 1) $ do
     putStrLn $ "Usage: " ++ pack prog ++ " <config file path>"
     exitFailure
+
+  mainThreadId <- myThreadId
+  installHandler sigINT (Catch $ throwTo mainThreadId UserInterrupt) Nothing
+  installHandler sigTERM (Catch $ throwTo mainThreadId UserInterrupt) Nothing
 
   let configFile = headEx args
   loadBotConfig configFile >>= run

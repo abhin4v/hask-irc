@@ -5,7 +5,7 @@ module Network.IRC.Handlers.SongSearch (getMsgHandler) where
 import qualified Data.Configurator as CF
 
 import ClassyPrelude hiding (try)
-import Control.Exception
+import Control.Exception.Lifted
 import Control.Monad.Reader
 import Data.Aeson
 import Data.Aeson.Types (emptyArray)

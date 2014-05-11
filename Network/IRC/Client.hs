@@ -33,8 +33,8 @@ sendCommand Bot { .. } reply = do
   TF.hprint socket "{}\r\n" $ TF.Only line
   TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
 
-listen :: IRC ()
-listen = do
+listenerLoop :: IRC ()
+listenerLoop = do
   status <- get
   bot@Bot { .. } <- ask
   let nick  = botNick botConfig
@@ -73,7 +73,7 @@ listen = do
         return nStatus
 
   put nStatus
-  when (nStatus /= Disconnected) listen
+  when (nStatus /= Disconnected) listenerLoop
 
 loadMsgHandlers :: BotConfig -> IO MsgHandlerStates
 loadMsgHandlers botConfig@BotConfig { .. } =
@@ -142,4 +142,4 @@ run botConfig' = withSocketsDo $ do
     go bot = do
       sendCommand bot NickCmd
       sendCommand bot UserCmd
-      runIRC bot Connected listen
+      runIRC bot Connected listenerLoop
