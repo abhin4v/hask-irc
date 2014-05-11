@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, ScopedTypeVariables, NoImplicitPrelude, OverloadedStrings, BangPatterns #-}
+{-# LANGUAGE RecordWildCards, ScopedTypeVariables, NoImplicitPrelude, OverloadedStrings #-}
 
 module Network.IRC.Client (run) where
 
@@ -9,7 +9,6 @@ import ClassyPrelude
 import Control.Concurrent.Lifted
 import Control.Monad.Reader hiding (forM_, foldM)
 import Control.Monad.State hiding (forM_, foldM)
-import Data.Maybe (fromJust)
 import Network
 import System.IO (hSetBuffering, BufferMode(..))
 import System.Timeout
@@ -39,29 +38,29 @@ listenerLoop idleFor = do
   bot@Bot { .. } <- ask
   let nick  = botNick botConfig
 
-  nStatus <- liftIO $ do
+  nStatus <- liftIO $
     if idleFor >= (oneSec * botTimeout botConfig)
       then return Disconnected
-    else do
-      when (status == Kicked) $
-        threadDelay (5 * oneSec) >> sendCommand bot JoinCmd
+      else do
+        when (status == Kicked) $
+          threadDelay (5 * oneSec) >> sendCommand bot JoinCmd
 
-      mLine <- map (map initEx) . timeout oneSec . hGetLine $ socket
-      case mLine of
-        Nothing -> dispatchHandlers bot IdleMsg >> return Idle
-        Just line -> do
-          now <- getCurrentTime
-          debug $ "< " ++ line
+        mLine <- map (map initEx) . timeout oneSec . hGetLine $ socket
+        case mLine of
+          Nothing -> dispatchHandlers bot IdleMsg >> return Idle
+          Just line -> do
+            now <- getCurrentTime
+            debug $ "< " ++ line
 
-          let message = msgFromLine botConfig now line
-          nStatus <- case message of
-            JoinMsg { .. } | userNick user == nick -> debug "Joined"          >> return Joined
-            KickMsg { .. } | kickedNick == nick    -> debug "Kicked"          >> return Kicked
-            ModeMsg { user = Self, .. }            -> sendCommand bot JoinCmd >> return Connected
-            _                                      -> return Connected
+            let message = msgFromLine botConfig now line
+            nStatus <- case message of
+              JoinMsg { .. } | userNick user == nick -> debug "Joined"          >> return Joined
+              KickMsg { .. } | kickedNick == nick    -> debug "Kicked"          >> return Kicked
+              ModeMsg { user = Self, .. }            -> sendCommand bot JoinCmd >> return Connected
+              _                                      -> return Connected
 
-          dispatchHandlers bot message
-          return nStatus
+            dispatchHandlers bot message
+            return nStatus
 
   put nStatus
   case nStatus of
@@ -71,49 +70,36 @@ listenerLoop idleFor = do
 
   where
     dispatchHandlers bot@Bot { .. } message =
-      forM_ (msgHandlers botConfig) $ \msgHandlerName -> fork $
+      forM_ (mapToList msgHandlers) $ \(_, msgHandler) -> fork $
         handle (\(e :: SomeException) -> debug $ "Exception! " ++ pack (show e)) $ do
-          let mMsgHandler = getMsgHandler msgHandlerName
-          case mMsgHandler of
-            Nothing         -> debug $ "No msg handler found with name: " ++ msgHandlerName
-            Just msgHandler ->
-              let msgHandlerState = fromJust . lookup msgHandlerName $ msgHandlerStates
-              in modifyMVar_ msgHandlerState $ \hState -> do
-                !(mCmd, nhState) <- runMsgHandler msgHandler botConfig hState message
-                case mCmd of
-                  Nothing  -> return ()
-                  Just cmd -> sendCommand bot cmd
-                return nhState
+          mCmd <- runMsgHandler msgHandler botConfig message
+          case mCmd of
+            Nothing  -> return ()
+            Just cmd -> sendCommand bot cmd
 
-loadMsgHandlers :: BotConfig -> IO MsgHandlerStates
+loadMsgHandlers :: BotConfig -> IO (Map MsgHandlerName MsgHandler)
 loadMsgHandlers botConfig@BotConfig { .. } =
-  flip (`foldM` mapFromList []) msgHandlers $ \hMap msgHandlerName -> do
+  flip (`foldM` mempty) msgHandlerNames $ \hMap msgHandlerName -> do
     debug $ "Loading msg handler: " ++ msgHandlerName
-    let mMsgHandler = getMsgHandler msgHandlerName
+    mMsgHandler <- mkMsgHandler botConfig msgHandlerName
     case mMsgHandler of
       Nothing         -> debug ("No msg handler found with name: " ++ msgHandlerName) >> return hMap
-      Just msgHandler -> do
-        !msgHandlerState  <- initMsgHandler msgHandler botConfig
-        mvMsgHandlerState <- newMVar msgHandlerState
-        return $ insertMap msgHandlerName mvMsgHandlerState hMap
+      Just msgHandler -> return $ insertMap msgHandlerName msgHandler hMap
 
 unloadMsgHandlers :: Bot -> IO ()
 unloadMsgHandlers Bot { .. } =
-  forM_ (mapToList msgHandlerStates) $ \(msgHandlerName, msgHandlerState) -> do
+  forM_ (mapToList msgHandlers) $ \(msgHandlerName, msgHandler) -> do
     debug $ "Unloading msg handler: " ++ msgHandlerName
-    let mMsgHandler = getMsgHandler msgHandlerName
-    case mMsgHandler of
-      Nothing         -> debug ("No msg handler found with name: " ++ msgHandlerName)
-      Just msgHandler -> takeMVar msgHandlerState >>= exitMsgHandler msgHandler botConfig
+    stopMsgHandler msgHandler botConfig
 
 connect :: BotConfig -> IO Bot
 connect botConfig@BotConfig { .. } = do
   debug "Connecting ..."
   socket <- connectToWithRetry
   hSetBuffering socket LineBuffering
-  msgHandlerStates <- loadMsgHandlers botConfig
+  msgHandlers <- loadMsgHandlers botConfig
   debug "Connected"
-  return $ Bot botConfig socket msgHandlerStates
+  return $ Bot botConfig socket msgHandlers
   where
     connectToWithRetry = connectTo (unpack server) (PortNumber (fromIntegral port))
                            `catch` (\(e :: SomeException) -> do
@@ -130,7 +116,7 @@ disconnect bot@Bot { .. } = do
 
 addCoreMsgHandlers :: BotConfig -> BotConfig
 addCoreMsgHandlers botConfig =
-  botConfig { msgHandlers = hashNub $ msgHandlers botConfig ++ coreMsgHandlerNames }
+  botConfig { msgHandlerNames = hashNub $ msgHandlerNames botConfig ++ coreMsgHandlerNames }
 
 run :: BotConfig -> IO ()
 run botConfig' = withSocketsDo $ do

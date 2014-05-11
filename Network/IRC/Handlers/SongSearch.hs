@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings, ScopedTypeVariables, NoImplicitPrelude, FlexibleContexts #-}
 
-module Network.IRC.Handlers.SongSearch (getMsgHandler) where
+module Network.IRC.Handlers.SongSearch (mkMsgHandler) where
 
 import qualified Data.Configurator as CF
 
@@ -15,9 +15,9 @@ import Network.HTTP.Base
 
 import Network.IRC.Types
 
-getMsgHandler :: MsgHandlerName -> Maybe MsgHandler
-getMsgHandler "songsearch" = Just $ newMsgHandler { msgHandlerRun = songSearch }
-getMsgHandler _            = Nothing
+mkMsgHandler :: BotConfig -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler _ "songsearch" = return . Just $ newMsgHandler { msgHandlerRun = songSearch }
+mkMsgHandler _ _          = return Nothing
 
 data Song = NoSong | Song { url :: Text, name :: Text, artist :: Text }
             deriving (Show, Eq)

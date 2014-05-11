@@ -1,12 +1,12 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings, NoImplicitPrelude, FlexibleContexts #-}
 
-module Network.IRC.Handlers (coreMsgHandlerNames, getMsgHandler) where
+module Network.IRC.Handlers (coreMsgHandlerNames, mkMsgHandler) where
 
 import qualified Network.IRC.Handlers.MessageLogger as L
 import qualified Network.IRC.Handlers.SongSearch as SS
 
 import ClassyPrelude
-import Control.Monad.Reader
+import Control.Monad.Reader.Class
 import Data.Text (strip)
 
 import Network.IRC.Types
@@ -17,12 +17,15 @@ clean = toLower . strip
 coreMsgHandlerNames :: [Text]
 coreMsgHandlerNames = ["pingpong", "messagelogger"]
 
-getMsgHandler :: MsgHandlerName -> Maybe MsgHandler
-getMsgHandler "greeter"  = Just $ newMsgHandler { msgHandlerRun = greeter }
-getMsgHandler "welcomer" = Just $ newMsgHandler { msgHandlerRun = welcomer }
-getMsgHandler "pingpong" = Just $ newMsgHandler { msgHandlerRun = pingPong }
-getMsgHandler name       = listToMaybe $ mapMaybe (\f -> f name)
-                           [L.getMsgHandler, SS.getMsgHandler]
+mkMsgHandler :: BotConfig -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler _ "greeter"  = return . Just $ newMsgHandler { msgHandlerRun = greeter }
+mkMsgHandler _ "welcomer" = return . Just $ newMsgHandler { msgHandlerRun = welcomer }
+mkMsgHandler _ "pingpong" = return . Just $ newMsgHandler { msgHandlerRun = pingPong }
+mkMsgHandler botConfig name       =
+  flip (`foldM` Nothing) [L.mkMsgHandler, SS.mkMsgHandler] $ \acc h ->
+    case acc of
+      Just _  -> return acc
+      Nothing -> h botConfig name
 
 pingPong :: MonadMsgHandler m => Message -> m (Maybe Command)
 pingPong Ping { .. } = return . Just $ Pong msg
