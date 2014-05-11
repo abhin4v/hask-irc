@@ -2,7 +2,7 @@
 
 module Network.IRC.Handlers (coreMsgHandlerNames, getMsgHandler) where
 
-import qualified Network.IRC.Handlers.Core as C
+import qualified Network.IRC.Handlers.MessageLogger as L
 import qualified Network.IRC.Handlers.SongSearch as SS
 
 import ClassyPrelude
@@ -20,9 +20,13 @@ coreMsgHandlerNames = ["pingpong", "messagelogger"]
 getMsgHandler :: MsgHandlerName -> Maybe MsgHandler
 getMsgHandler "greeter"  = Just $ newMsgHandler { msgHandlerRun = greeter }
 getMsgHandler "welcomer" = Just $ newMsgHandler { msgHandlerRun = welcomer }
+getMsgHandler "pingpong" = Just $ newMsgHandler { msgHandlerRun = pingPong }
 getMsgHandler name       = listToMaybe $ mapMaybe (\f -> f name)
-                           [C.getMsgHandler, SS.getMsgHandler]
+                           [L.getMsgHandler, SS.getMsgHandler]
 
+pingPong :: MonadMsgHandler m => Message -> m (Maybe Command)
+pingPong Ping { .. } = return . Just $ Pong msg
+pingPong _           = return Nothing
 
 greeter ::  MonadMsgHandler m => Message -> m (Maybe Command)
 greeter ChannelMsg { .. } = case find (== clean msg) greetings of

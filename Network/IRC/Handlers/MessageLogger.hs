@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards, NoImplicitPrelude, OverloadedStrings, FlexibleContexts, ScopedTypeVariables #-}
 
-module Network.IRC.Handlers.Core (getMsgHandler) where
+module Network.IRC.Handlers.MessageLogger (getMsgHandler) where
 
 import qualified Data.Configurator as C
 import qualified Data.Text.Format as TF
@@ -18,15 +18,10 @@ import System.IO (openFile, IOMode(..), hSetBuffering, BufferMode(..))
 import Network.IRC.Types
 
 getMsgHandler :: MsgHandlerName -> Maybe MsgHandler
-getMsgHandler "pingpong"      = Just $ newMsgHandler { msgHandlerRun = pingPong }
 getMsgHandler "messagelogger" = Just $ newMsgHandler { msgHandlerInit = initMessageLogger
                                                      , msgHandlerRun  = messageLogger
                                                      , msgHandlerExit = exitMessageLogger }
 getMsgHandler _               = Nothing
-
-pingPong :: MonadMsgHandler m => Message -> m (Maybe Command)
-pingPong Ping { .. } = return . Just $ Pong msg
-pingPong _           = return Nothing
 
 getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do
