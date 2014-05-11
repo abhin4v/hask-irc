@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, ScopedTypeVariables, NoImplicitPrelude, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, ScopedTypeVariables, NoImplicitPrelude, OverloadedStrings, BangPatterns #-}
 
 module Network.IRC.Client (run) where
 
@@ -6,7 +6,7 @@ import qualified Data.Text.Format as TF
 import qualified Data.Text.Format.Params as TF
 
 import ClassyPrelude
-import Control.Concurrent
+import Control.Concurrent.Lifted
 import Control.Monad.Reader hiding (forM_, foldM)
 import Control.Monad.State hiding (forM_, foldM)
 import Data.Maybe (fromJust)
@@ -31,7 +31,7 @@ sendCommand Bot { .. } reply = do
   time <- getCurrentTime
   let line = lineFromCommand botConfig reply
   TF.hprint socket "{}\r\n" $ TF.Only line
-  TF.print "[{}} > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
+  TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
 
 listen :: IRC ()
 listen = do
@@ -57,21 +57,44 @@ listen = do
           ModeMsg { user = Self, .. }            -> sendCommand bot JoinCmd >> return status
           _                                      -> return status
 
-        forM_ (msgHandlers botConfig) $ \msgHandlerName -> forkIO $ do
+        forM_ (msgHandlers botConfig) $ \msgHandlerName -> fork $ do
           let mMsgHandler = getMsgHandler msgHandlerName
           case mMsgHandler of
             Nothing         -> debug $ "No msg handler found with name: " ++ msgHandlerName
-            Just msgHandler -> do
+            Just msgHandler ->
               let msgHandlerState = fromJust . lookup msgHandlerName $ msgHandlerStates
-              mCmd <- runMsgHandler msgHandler botConfig msgHandlerState message
-              case mCmd of
-                Nothing  -> return ()
-                Just cmd -> sendCommand bot cmd
+              in modifyMVar_ msgHandlerState $ \hState -> do
+                !(mCmd, nhState) <- runMsgHandler msgHandler botConfig hState message
+                case mCmd of
+                  Nothing  -> return ()
+                  Just cmd -> sendCommand bot cmd
+                return nhState
 
         return nStatus
 
   put nStatus
   when (nStatus /= Disconnected) listen
+
+loadMsgHandlers :: BotConfig -> IO MsgHandlerStates
+loadMsgHandlers botConfig@BotConfig { .. } =
+  flip (`foldM` mapFromList []) msgHandlers $ \hMap msgHandlerName -> do
+    debug $ "Loading msg handler: " ++ msgHandlerName
+    let mMsgHandler = getMsgHandler msgHandlerName
+    case mMsgHandler of
+      Nothing         -> debug ("No msg handler found with name: " ++ msgHandlerName) >> return hMap
+      Just msgHandler -> do
+        !msgHandlerState  <- initMsgHandler msgHandler botConfig
+        mvMsgHandlerState <- newMVar msgHandlerState
+        return $ insertMap msgHandlerName mvMsgHandlerState hMap
+
+unloadMsgHandlers :: Bot -> IO ()
+unloadMsgHandlers Bot { .. } =
+  forM_ (mapToList msgHandlerStates) $ \(msgHandlerName, msgHandlerState) -> do
+    debug $ "Unloading msg handler: " ++ msgHandlerName
+    let mMsgHandler = getMsgHandler msgHandlerName
+    case mMsgHandler of
+      Nothing         -> debug ("No msg handler found with name: " ++ msgHandlerName)
+      Just msgHandler -> takeMVar msgHandlerState >>= exitMsgHandler msgHandler botConfig
 
 connect :: BotConfig -> IO Bot
 connect botConfig@BotConfig { .. } = do
@@ -87,27 +110,6 @@ connect botConfig@BotConfig { .. } = do
                                       debug ("Error while connecting: " ++ pack (show e) ++ ". Waiting.")
                                       threadDelay (5 * oneSec)
                                       connectToWithRetry)
-
-loadMsgHandlers :: BotConfig -> IO MsgHandlerStates
-loadMsgHandlers botConfig@BotConfig { .. } =
-  flip (`foldM` mapFromList []) msgHandlers $ \hMap msgHandlerName -> do
-    debug $ "Loading msg handler: " ++ msgHandlerName
-    let mMsgHandler = getMsgHandler msgHandlerName
-    case mMsgHandler of
-      Nothing         -> debug ("No msg handler found with name: " ++ msgHandlerName) >> return hMap
-      Just msgHandler -> do
-        msgHandlerState <- initMsgHandler msgHandler botConfig
-        return $ insertMap msgHandlerName msgHandlerState hMap
-
-unloadMsgHandlers :: Bot -> IO ()
-unloadMsgHandlers Bot { .. } =
-  forM_ (mapToList msgHandlerStates) $ \(msgHandlerName, msgHandlerState) -> do
-    debug $ "Unloading msg handler: " ++ msgHandlerName
-    let mMsgHandler = getMsgHandler msgHandlerName
-    case mMsgHandler of
-      Nothing         -> debug ("No msg handler found with name: " ++ msgHandlerName)
-      Just msgHandler -> exitMsgHandler msgHandler botConfig msgHandlerState
-
 
 disconnect :: Bot -> IO ()
 disconnect bot@Bot { .. } = do

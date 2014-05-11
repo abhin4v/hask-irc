@@ -56,27 +56,27 @@ fmtTime :: UTCTime -> String
 fmtTime = formatTime defaultTimeLocale "%F %T"
 
 messageLogger :: MonadMsgHandler m => Message -> m (Maybe Command)
-messageLogger ChannelMsg { .. } = withLogFile $ \logFileHandle ->
-  TF.hprint logFileHandle "[{}] {}: {}\n" $ TF.buildParams (fmtTime msgTime, userNick user, msg)
+messageLogger ChannelMsg { .. } = withLogFile $ \logFile ->
+  TF.hprint logFile "[{}] {}: {}\n" $ TF.buildParams (fmtTime msgTime, userNick user, msg)
 
-messageLogger KickMsg { .. } = withLogFile $ \logFileHandle ->
-  TF.hprint logFileHandle "[{}] ** {} KICKED {} :{}\n" $
+messageLogger KickMsg { .. } = withLogFile $ \logFile ->
+  TF.hprint logFile "[{}] ** {} KICKED {} :{}\n" $
     TF.buildParams (fmtTime msgTime, userNick user, kickedNick, msg)
 
-messageLogger JoinMsg { .. } = withLogFile $ \logFileHandle ->
-  TF.hprint logFileHandle "[{}] ** {} JOINED\n" $
+messageLogger JoinMsg { .. } = withLogFile $ \logFile ->
+  TF.hprint logFile "[{}] ** {} JOINED\n" $
     TF.buildParams (fmtTime msgTime, userNick user)
 
-messageLogger PartMsg { .. } = withLogFile $ \logFileHandle ->
-  TF.hprint logFileHandle "[{}] ** {} PARTED :{}\n" $
+messageLogger PartMsg { .. } = withLogFile $ \logFile ->
+  TF.hprint logFile "[{}] ** {} PARTED :{}\n" $
     TF.buildParams (fmtTime msgTime, userNick user, msg)
 
-messageLogger QuitMsg { .. } = withLogFile $ \logFileHandle ->
-  TF.hprint logFileHandle "[{}] ** {} QUIT :{}\n" $
+messageLogger QuitMsg { .. } = withLogFile $ \logFile ->
+  TF.hprint logFile "[{}] ** {} QUIT :{}\n" $
     TF.buildParams (fmtTime msgTime, userNick user, msg)
 
-messageLogger NickMsg { .. } = withLogFile $ \logFileHandle ->
-  TF.hprint logFileHandle "[{}] ** {} CHANGED NICK TO {}\n" $
+messageLogger NickMsg { .. } = withLogFile $ \logFile ->
+  TF.hprint logFile "[{}] ** {} CHANGED NICK TO {}\n" $
     TF.buildParams (fmtTime msgTime, userNick user, nick)
 
 messageLogger _ = return Nothing

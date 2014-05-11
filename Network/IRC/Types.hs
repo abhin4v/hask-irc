@@ -64,11 +64,12 @@ instance Show BotConfig where
                           "timeout = " ++ show botTimeout ++ "\n" ++
                           "handlers = " ++ show msgHandlers
 
-type MsgHandlerStates = Map MsgHandlerName MsgHandlerState
+type MsgHandlerState  = Dynamic
+type MsgHandlerStates = Map MsgHandlerName (MVar MsgHandlerState)
 
 data Bot = Bot { botConfig        :: !BotConfig
                , socket           :: !Handle
-               , msgHandlerStates :: !MsgHandlerStates}
+               , msgHandlerStates :: !MsgHandlerStates }
 
 data BotStatus = Connected | Disconnected | Joined | Kicked | Errored
                  deriving (Show, Eq)
@@ -79,12 +80,10 @@ newtype IRC a = IRC { _runIRC :: StateT BotStatus (ReaderT Bot IO) a }
                          , Monad
                          , MonadIO
                          , MonadReader Bot
-                         , MonadState BotStatus)
+                         , MonadState BotStatus )
 
 runIRC :: Bot -> BotStatus -> IRC a -> IO BotStatus
 runIRC bot botStatus = flip runReaderT bot . flip execStateT botStatus . _runIRC
-
-type MsgHandlerState = Dynamic
 
 newtype MsgHandlerT a = MsgHandlerT { _runMsgHandler :: StateT MsgHandlerState (ReaderT BotConfig IO) a }
                      deriving ( Functor
@@ -92,18 +91,18 @@ newtype MsgHandlerT a = MsgHandlerT { _runMsgHandler :: StateT MsgHandlerState (
                               , Monad
                               , MonadIO
                               , MonadState MsgHandlerState
-                              , MonadReader BotConfig)
+                              , MonadReader BotConfig )
 
 class ( MonadIO m, Applicative m
-      , MonadState MsgHandlerState m, MonadReader BotConfig m) => MonadMsgHandler m where
+      , MonadState MsgHandlerState m, MonadReader BotConfig m ) => MonadMsgHandler m where
   msgHandler :: MsgHandlerT a -> m a
 
 instance MonadMsgHandler MsgHandlerT where
   msgHandler = id
 
-runMsgHandler :: MsgHandler -> BotConfig -> MsgHandlerState -> Message -> IO (Maybe Command)
+runMsgHandler :: MsgHandler -> BotConfig -> MsgHandlerState -> Message -> IO (Maybe Command, MsgHandlerState)
 runMsgHandler MsgHandler { .. } botConfig msgHandlerState =
-  flip runReaderT botConfig . flip evalStateT msgHandlerState . _runMsgHandler . msgHandlerRun
+  flip runReaderT botConfig . flip runStateT msgHandlerState . _runMsgHandler . msgHandlerRun
 
 initMsgHandler :: MsgHandler -> BotConfig -> IO MsgHandlerState
 initMsgHandler MsgHandler { .. } botConfig =
