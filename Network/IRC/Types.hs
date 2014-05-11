@@ -27,6 +27,7 @@ data Message =
     IdleMsg
   | ChannelMsg { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
   | PrivMsg    { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
+  | ActionMsg  { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
   | Ping       { msgTime  :: !UTCTime, msg    :: !Text, msgLine     :: !Text }
   | JoinMsg    { msgTime  :: !UTCTime, user   :: !User, msgLine     :: !Text }
   | QuitMsg    { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }

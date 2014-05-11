@@ -70,18 +70,20 @@ listenerLoop idleFor = do
     _            -> listenerLoop 0
 
   where
-    dispatchHandlers bot@Bot { .. } message = forM_ (msgHandlers botConfig) $ \msgHandlerName -> fork $ do
-      let mMsgHandler = getMsgHandler msgHandlerName
-      case mMsgHandler of
-        Nothing         -> debug $ "No msg handler found with name: " ++ msgHandlerName
-        Just msgHandler ->
-          let msgHandlerState = fromJust . lookup msgHandlerName $ msgHandlerStates
-          in modifyMVar_ msgHandlerState $ \hState -> do
-            !(mCmd, nhState) <- runMsgHandler msgHandler botConfig hState message
-            case mCmd of
-              Nothing  -> return ()
-              Just cmd -> sendCommand bot cmd
-            return nhState
+    dispatchHandlers bot@Bot { .. } message =
+      forM_ (msgHandlers botConfig) $ \msgHandlerName -> fork $
+        handle (\(e :: SomeException) -> debug $ "Exception! " ++ pack (show e)) $ do
+          let mMsgHandler = getMsgHandler msgHandlerName
+          case mMsgHandler of
+            Nothing         -> debug $ "No msg handler found with name: " ++ msgHandlerName
+            Just msgHandler ->
+              let msgHandlerState = fromJust . lookup msgHandlerName $ msgHandlerStates
+              in modifyMVar_ msgHandlerState $ \hState -> do
+                !(mCmd, nhState) <- runMsgHandler msgHandler botConfig hState message
+                case mCmd of
+                  Nothing  -> return ()
+                  Just cmd -> sendCommand bot cmd
+                return nhState
 
 loadMsgHandlers :: BotConfig -> IO MsgHandlerStates
 loadMsgHandlers botConfig@BotConfig { .. } =

@@ -46,7 +46,7 @@ initMessageLogger = do
   (logFileHandle, curDay) <- liftIO $ do
     logFilePath   <- getLogFilePath botConfig
     logFileHandle <- openLogFile logFilePath
-    time <- getCurrentTime
+    time <- getModificationTime logFilePath
     return (logFileHandle, utctDay time)
   put $ toDyn (logFileHandle, curDay)
 
@@ -87,6 +87,10 @@ fmtTime = formatTime defaultTimeLocale "%F %T"
 messageLogger :: MonadMsgHandler m => Message -> m (Maybe Command)
 messageLogger ChannelMsg { .. } = withLogFile $ \logFile ->
   TF.hprint logFile "[{}] {}: {}\n" $ TF.buildParams (fmtTime msgTime, userNick user, msg)
+
+messageLogger ActionMsg { .. } = withLogFile $ \logFile ->
+  TF.hprint logFile "[{}] {}: {} {}\n" $
+    TF.buildParams (fmtTime msgTime, userNick user, userNick user, msg)
 
 messageLogger KickMsg { .. } = withLogFile $ \logFile ->
   TF.hprint logFile "[{}] ** {} KICKED {} :{}\n" $
