@@ -46,10 +46,37 @@ exitMessageLogger = do
     Nothing -> return ()
     Just logFileHandle -> liftIO $ hClose logFileHandle
 
-messageLogger :: MonadMsgHandler m => Message -> m (Maybe Command)
-messageLogger ChannelMsg { .. } = do
+withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> m (Maybe Command)
+withLogFile action = do
   logFileHandle <- map (`fromDyn` error "No log file set") get
-  let time = formatTime defaultTimeLocale "%F %T" msgTime
-  liftIO $ TF.hprint logFileHandle "[{}] {}: {}\n" $ TF.buildParams (time, userNick user, msg)
+  liftIO $ action logFileHandle
   return Nothing
+
+fmtTime :: UTCTime -> String
+fmtTime = formatTime defaultTimeLocale "%F %T"
+
+messageLogger :: MonadMsgHandler m => Message -> m (Maybe Command)
+messageLogger ChannelMsg { .. } = withLogFile $ \logFileHandle ->
+  TF.hprint logFileHandle "[{}] {}: {}\n" $ TF.buildParams (fmtTime msgTime, userNick user, msg)
+
+messageLogger KickMsg { .. } = withLogFile $ \logFileHandle ->
+  TF.hprint logFileHandle "[{}] ** {} KICKED {} :{}\n" $
+    TF.buildParams (fmtTime msgTime, userNick user, kickedNick, msg)
+
+messageLogger JoinMsg { .. } = withLogFile $ \logFileHandle ->
+  TF.hprint logFileHandle "[{}] ** {} JOINED\n" $
+    TF.buildParams (fmtTime msgTime, userNick user)
+
+messageLogger PartMsg { .. } = withLogFile $ \logFileHandle ->
+  TF.hprint logFileHandle "[{}] ** {} PARTED :{}\n" $
+    TF.buildParams (fmtTime msgTime, userNick user, msg)
+
+messageLogger QuitMsg { .. } = withLogFile $ \logFileHandle ->
+  TF.hprint logFileHandle "[{}] ** {} QUIT :{}\n" $
+    TF.buildParams (fmtTime msgTime, userNick user, msg)
+
+messageLogger NickMsg { .. } = withLogFile $ \logFileHandle ->
+  TF.hprint logFileHandle "[{}] ** {} CHANGED NICK TO {}\n" $
+    TF.buildParams (fmtTime msgTime, userNick user, nick)
+
 messageLogger _ = return Nothing

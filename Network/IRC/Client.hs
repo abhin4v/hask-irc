@@ -51,9 +51,9 @@ listen = do
         debug $ "< " ++ line
 
         let message = msgFromLine botConfig now line
-        case message of
+        nStatus <- case message of
           JoinMsg { .. } | userNick user == nick -> debug "Joined"          >> return Joined
-          KickMsg { .. } | kicked == nick        -> debug "Kicked"          >> return Kicked
+          KickMsg { .. } | kickedNick == nick    -> debug "Kicked"          >> return Kicked
           ModeMsg { user = Self, .. }            -> sendCommand bot JoinCmd >> return status
           _                                      -> return status
 
@@ -67,7 +67,8 @@ listen = do
               case mCmd of
                 Nothing  -> return ()
                 Just cmd -> sendCommand bot cmd
-        return status
+
+        return nStatus
 
   put nStatus
   when (nStatus /= Disconnected) listen

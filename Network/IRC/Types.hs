@@ -24,18 +24,18 @@ data User = Self | User { userNick :: !Nick, userServer :: !Text }
             deriving (Show, Eq)
 
 data Message =
-    ChannelMsg { msgTime  :: !UTCTime, user   :: !User, msg     :: !Text, msgLine :: !Text }
-  | PrivMsg    { msgTime  :: !UTCTime, user   :: !User, msg     :: !Text, msgLine :: !Text }
-  | Ping       { msgTime  :: !UTCTime, msg    :: !Text, msgLine :: !Text }
-  | JoinMsg    { msgTime  :: !UTCTime, user   :: !User, msgLine :: !Text }
-  | ModeMsg    { msgTime  :: !UTCTime, user   :: !User, target  :: !Text, mode    :: !Text
+    ChannelMsg { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
+  | PrivMsg    { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
+  | Ping       { msgTime  :: !UTCTime, msg    :: !Text, msgLine     :: !Text }
+  | JoinMsg    { msgTime  :: !UTCTime, user   :: !User, msgLine     :: !Text }
+  | QuitMsg    { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
+  | PartMsg    { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
+  | ModeMsg    { msgTime  :: !UTCTime, user   :: !User, target      :: !Text, mode    :: !Text
                , modeArgs :: ![Text], msgLine :: !Text }
-  | NickMsg    { msgTime  :: !UTCTime, user   :: !User, nick    :: !Text, msgLine :: !Text }
-  | QuitMsg    { msgTime  :: !UTCTime, user   :: !User, msg     :: !Text, msgLine :: !Text }
-  | PartMsg    { msgTime  :: !UTCTime, user   :: !User, msg     :: !Text, msgLine :: !Text }
-  | KickMsg    { msgTime  :: !UTCTime, user   :: !User, kicked  :: !Text, msg     :: !Text
+  | NickMsg    { msgTime  :: !UTCTime, user   :: !User, nick        :: !Text, msgLine :: !Text }
+  | KickMsg    { msgTime  :: !UTCTime, user   :: !User, kickedNick  :: !Text, msg     :: !Text
                , msgLine  :: !Text }
-  | OtherMsg   { msgTime  :: !UTCTime, source :: !Text, command :: !Text, target  :: !Text
+  | OtherMsg   { msgTime  :: !UTCTime, source :: !Text, command     :: !Text, target  :: !Text
                , msg      :: !Text,   msgLine :: !Text }
   deriving (Show, Eq)
 

@@ -7,3 +7,7 @@ msghandlers = ["greeter", "welcomer", "songsearch"]
 songsearch {
   tinysong_apikey = "xxxyyyzzz"
 }
+
+messagelogger {
+  logdir = "./logs/"
+}
