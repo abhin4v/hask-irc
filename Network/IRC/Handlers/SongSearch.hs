@@ -1,11 +1,12 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, ScopedTypeVariables, NoImplicitPrelude #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings, ScopedTypeVariables, NoImplicitPrelude, FlexibleContexts #-}
 
-module Network.IRC.Handlers.SongSearch (songSearch) where
+module Network.IRC.Handlers.SongSearch (getMsgHandler) where
 
 import qualified Data.Configurator as CF
 
 import ClassyPrelude hiding (try)
 import Control.Exception
+import Control.Monad.Reader
 import Data.Aeson
 import Data.Aeson.Types (emptyArray)
 import Data.Text (strip)
@@ -13,6 +14,10 @@ import Network.Curl.Aeson
 import Network.HTTP.Base
 
 import Network.IRC.Types
+
+getMsgHandler :: MsgHandlerName -> Maybe MsgHandler
+getMsgHandler "songsearch" = Just $ newMsgHandler { msgHandlerRun = songSearch }
+getMsgHandler _            = Nothing
 
 data Song = NoSong | Song { url :: Text, name :: Text, artist :: Text }
             deriving (Show, Eq)
@@ -22,9 +27,11 @@ instance FromJSON Song where
     parseJSON a | a == emptyArray = return NoSong
     parseJSON _                   = mempty
 
-songSearch :: MonadIO m => BotConfig -> Message -> m (Maybe Command)
-songSearch BotConfig { .. } ChannelMsg { .. }
-  | "!m " `isPrefixOf` msg = liftIO $ do
+songSearch :: MonadMsgHandler m => Message -> m (Maybe Command)
+songSearch ChannelMsg { .. } =  if "!m " `isPrefixOf` msg
+  then do
+    BotConfig { .. } <- ask
+    liftIO $ do
       let query = strip . drop 3 $ msg
       mApiKey <- CF.lookup config "songsearch.tinysong_apikey"
       map (Just . ChannelMsgReply) $ case mApiKey of
@@ -40,5 +47,5 @@ songSearch BotConfig { .. } ChannelMsg { .. }
             Right song                     -> case song of
               Song { .. } -> "Listen to " ++ artist ++ " - " ++ name ++ " at " ++ url
               NoSong      -> "No song found for: " ++ query
-  | otherwise = return Nothing
-songSearch _ _ = return Nothing
+  else return Nothing
+songSearch _ = return Nothing

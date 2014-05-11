@@ -41,8 +41,8 @@ loadBotConfig configFile = do
         channel  <- CF.require cfg "channel"
         botNick  <- CF.require cfg "nick"
         timeout  <- CF.require cfg "timeout"
-        handlers <- CF.require cfg "handlers"
-        return $ BotConfig server port channel botNick timeout handlers cfg
+        msghandlers <- CF.require cfg "msghandlers"
+        return $ BotConfig server port channel botNick timeout msghandlers cfg
 
       case eBotConfig of
         Left (KeyError k) -> error $ "Error while reading key from config: " ++ unpack k

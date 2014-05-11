@@ -10,20 +10,20 @@ import Network.IRC.Types
 
 msgFromLine :: BotConfig -> UTCTime -> Text -> Message
 msgFromLine (BotConfig { .. }) time line
-  | "PING :" `isPrefixOf` line = Ping time . drop 6 $ line
+  | "PING :" `isPrefixOf` line = Ping time (drop 6 line) line
   | otherwise = case command of
-      "JOIN"    -> JoinMsg time user
-      "QUIT"    -> QuitMsg time user message
-      "PART"    -> PartMsg time user message
-      "KICK"    -> KickMsg time user kicked kickReason
+      "JOIN"    -> JoinMsg time user line
+      "QUIT"    -> QuitMsg time user message line
+      "PART"    -> PartMsg time user message line
+      "KICK"    -> KickMsg time user kicked kickReason line
       "MODE"    -> if source == botNick
-        then ModeMsg time Self target message []
-        else ModeMsg time user target mode modeArgs
-      "NICK"    -> NickMsg time user (drop 1 target)
+        then ModeMsg time Self target message [] line
+        else ModeMsg time user target mode modeArgs line
+      "NICK"    -> NickMsg time user (drop 1 target) line
       "PRIVMSG" -> if target == channel
-        then ChannelMsg time user message
-        else PrivMsg time user message
-      _         -> OtherMsg time source command target message
+        then ChannelMsg time user message line
+        else PrivMsg time user message line
+      _         -> OtherMsg time source command target message line
   where
     isSpc      = (== ' ')
     isNotSpc   = not . isSpc
@@ -46,4 +46,3 @@ lineFromCommand (BotConfig { .. }) reply = case reply of
   JoinCmd                         -> "JOIN " ++ channel
   ChannelMsgReply { .. }          -> "PRIVMSG " ++ channel ++ " :" ++ rmsg
   PrivMsgReply (User { .. }) rmsg -> "PRIVMSG " ++ botNick ++ " :" ++ rmsg
-
