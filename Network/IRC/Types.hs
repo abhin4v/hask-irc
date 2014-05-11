@@ -24,7 +24,8 @@ data User = Self | User { userNick :: !Nick, userServer :: !Text }
             deriving (Show, Eq)
 
 data Message =
-    ChannelMsg { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
+    IdleMsg
+  | ChannelMsg { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
   | PrivMsg    { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
   | Ping       { msgTime  :: !UTCTime, msg    :: !Text, msgLine     :: !Text }
   | JoinMsg    { msgTime  :: !UTCTime, user   :: !User, msgLine     :: !Text }
@@ -71,7 +72,7 @@ data Bot = Bot { botConfig        :: !BotConfig
                , socket           :: !Handle
                , msgHandlerStates :: !MsgHandlerStates }
 
-data BotStatus = Connected | Disconnected | Joined | Kicked | Errored
+data BotStatus = Connected | Disconnected | Joined | Kicked | Errored | Idle
                  deriving (Show, Eq)
 
 newtype IRC a = IRC { _runIRC :: StateT BotStatus (ReaderT Bot IO) a }

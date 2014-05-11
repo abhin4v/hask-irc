@@ -33,47 +33,55 @@ sendCommand Bot { .. } reply = do
   TF.hprint socket "{}\r\n" $ TF.Only line
   TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
 
-listenerLoop :: IRC ()
-listenerLoop = do
+listenerLoop :: Int -> IRC ()
+listenerLoop idleFor = do
   status <- get
   bot@Bot { .. } <- ask
   let nick  = botNick botConfig
 
   nStatus <- liftIO $ do
-    when (status == Kicked) $
-      threadDelay (5 * oneSec) >> sendCommand bot JoinCmd
+    if idleFor >= (oneSec * botTimeout botConfig)
+      then return Disconnected
+    else do
+      when (status == Kicked) $
+        threadDelay (5 * oneSec) >> sendCommand bot JoinCmd
 
-    mLine <- map (map initEx) . timeout (oneSec * botTimeout botConfig) . hGetLine $ socket
-    case mLine of
-      Nothing -> return Disconnected
-      Just line -> do
-        now <- getCurrentTime
-        debug $ "< " ++ line
+      mLine <- map (map initEx) . timeout oneSec . hGetLine $ socket
+      case mLine of
+        Nothing -> dispatchHandlers bot IdleMsg >> return Idle
+        Just line -> do
+          now <- getCurrentTime
+          debug $ "< " ++ line
 
-        let message = msgFromLine botConfig now line
-        nStatus <- case message of
-          JoinMsg { .. } | userNick user == nick -> debug "Joined"          >> return Joined
-          KickMsg { .. } | kickedNick == nick    -> debug "Kicked"          >> return Kicked
-          ModeMsg { user = Self, .. }            -> sendCommand bot JoinCmd >> return status
-          _                                      -> return status
+          let message = msgFromLine botConfig now line
+          nStatus <- case message of
+            JoinMsg { .. } | userNick user == nick -> debug "Joined"          >> return Joined
+            KickMsg { .. } | kickedNick == nick    -> debug "Kicked"          >> return Kicked
+            ModeMsg { user = Self, .. }            -> sendCommand bot JoinCmd >> return Connected
+            _                                      -> return Connected
 
-        forM_ (msgHandlers botConfig) $ \msgHandlerName -> fork $ do
-          let mMsgHandler = getMsgHandler msgHandlerName
-          case mMsgHandler of
-            Nothing         -> debug $ "No msg handler found with name: " ++ msgHandlerName
-            Just msgHandler ->
-              let msgHandlerState = fromJust . lookup msgHandlerName $ msgHandlerStates
-              in modifyMVar_ msgHandlerState $ \hState -> do
-                !(mCmd, nhState) <- runMsgHandler msgHandler botConfig hState message
-                case mCmd of
-                  Nothing  -> return ()
-                  Just cmd -> sendCommand bot cmd
-                return nhState
-
-        return nStatus
+          dispatchHandlers bot message
+          return nStatus
 
   put nStatus
-  when (nStatus /= Disconnected) listenerLoop
+  case nStatus of
+    Idle         -> listenerLoop (idleFor + oneSec)
+    Disconnected -> return ()
+    _            -> listenerLoop 0
+
+  where
+    dispatchHandlers bot@Bot { .. } message = forM_ (msgHandlers botConfig) $ \msgHandlerName -> fork $ do
+      let mMsgHandler = getMsgHandler msgHandlerName
+      case mMsgHandler of
+        Nothing         -> debug $ "No msg handler found with name: " ++ msgHandlerName
+        Just msgHandler ->
+          let msgHandlerState = fromJust . lookup msgHandlerName $ msgHandlerStates
+          in modifyMVar_ msgHandlerState $ \hState -> do
+            !(mCmd, nhState) <- runMsgHandler msgHandler botConfig hState message
+            case mCmd of
+              Nothing  -> return ()
+              Just cmd -> sendCommand bot cmd
+            return nhState
 
 loadMsgHandlers :: BotConfig -> IO MsgHandlerStates
 loadMsgHandlers botConfig@BotConfig { .. } =
@@ -142,4 +150,4 @@ run botConfig' = withSocketsDo $ do
     go bot = do
       sendCommand bot NickCmd
       sendCommand bot UserCmd
-      runIRC bot Connected listenerLoop
+      runIRC bot Connected (listenerLoop 0)

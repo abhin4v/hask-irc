@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, NoImplicitPrelude, OverloadedStrings, FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards, NoImplicitPrelude, OverloadedStrings, FlexibleContexts, ScopedTypeVariables #-}
 
 module Network.IRC.Handlers.Core (getMsgHandler) where
 
@@ -6,13 +6,14 @@ import qualified Data.Configurator as C
 import qualified Data.Text.Format as TF
 import qualified Data.Text.Format.Params as TF
 
-import ClassyPrelude hiding (try, (</>), (<.>))
+import ClassyPrelude hiding (try, (</>), (<.>), FilePath)
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Dynamic
+import Data.Time (diffDays)
 import System.Directory
 import System.FilePath
-import System.IO
+import System.IO (openFile, IOMode(..), hSetBuffering, BufferMode(..))
 
 import Network.IRC.Types
 
@@ -27,29 +28,57 @@ pingPong :: MonadMsgHandler m => Message -> m (Maybe Command)
 pingPong Ping { .. } = return . Just $ Pong msg
 pingPong _           = return Nothing
 
+getLogFilePath :: BotConfig -> IO FilePath
+getLogFilePath BotConfig { .. } = do
+  logFileDir <- C.require config "messagelogger.logdir"
+  createDirectoryIfMissing True logFileDir
+  return $ logFileDir </> unpack botNick <.> "log"
+
+openLogFile :: FilePath -> IO Handle
+openLogFile logFilePath = do
+  logFileHandle <- openFile logFilePath AppendMode
+  hSetBuffering logFileHandle LineBuffering
+  return logFileHandle
+
 initMessageLogger :: MonadMsgHandler m => m ()
 initMessageLogger = do
-  BotConfig { .. } <- ask
-  logFileHandle <- liftIO $ do
-    logFileDir <- C.require config "messagelogger.logdir"
-    createDirectoryIfMissing True logFileDir
-    let logFilePath = logFileDir </> unpack botNick <.> "log"
-    logFileHandle <- openFile logFilePath AppendMode
-    hSetBuffering logFileHandle LineBuffering
-    return logFileHandle
-  put $ toDyn logFileHandle
+  botConfig <- ask
+  (logFileHandle, curDay) <- liftIO $ do
+    logFilePath   <- getLogFilePath botConfig
+    logFileHandle <- openLogFile logFilePath
+    time <- getCurrentTime
+    return (logFileHandle, utctDay time)
+  put $ toDyn (logFileHandle, curDay)
 
 exitMessageLogger :: MonadMsgHandler m => m ()
 exitMessageLogger = do
   mHandle <- map fromDynamic get
   case mHandle of
-    Nothing -> return ()
-    Just logFileHandle -> liftIO $ hClose logFileHandle
+    Nothing                            -> return ()
+    Just (logFileHandle, _ :: UTCTime) -> liftIO $ hClose logFileHandle
 
 withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> m (Maybe Command)
 withLogFile action = do
-  logFileHandle <- map (`fromDyn` error "No log file set") get
-  liftIO $ action logFileHandle
+  botConfig <- ask
+
+  (logFileHandle, prevDay) <- map (`fromDyn` error "No log file set") get
+
+  (logFileHandle', curDay) <- liftIO $ do
+    curDay <- map utctDay getCurrentTime
+    let diff = diffDays curDay prevDay
+    logFileHandle'' <- if diff >= 1
+      then do
+        hClose logFileHandle
+        logFilePath <- getLogFilePath botConfig
+        copyFile logFilePath (logFilePath <.> show prevDay)
+        removeFile logFilePath
+        openLogFile logFilePath
+      else return logFileHandle
+
+    action logFileHandle''
+    return (logFileHandle'', curDay)
+
+  put $ toDyn (logFileHandle', curDay)
   return Nothing
 
 fmtTime :: UTCTime -> String
