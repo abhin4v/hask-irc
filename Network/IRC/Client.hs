@@ -28,30 +28,60 @@ debug msg = do
   time <- getCurrentTime
   TF.print "[{}] {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, msg)
 
-sendCommand :: Bot -> Command -> IO ()
-sendCommand Bot { .. } reply = do
-  time <- getCurrentTime
-  let line = lineFromCommand botConfig reply
-  TF.hprint socket "{}\r\n" $ TF.Only line
-  TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
+type Latch = MVar ()
 
-data Line = Timeout | EOF | Line !Text deriving (Show, Eq)
+latchIt :: Latch -> IO ()
+latchIt latch = putMVar latch ()
 
-readLine :: Handle -> Int -> IO Line
-readLine socket timeoutDelay = do
-  mLine <- timeout timeoutDelay readLine'
-  case mLine of
-    Nothing   -> return Timeout
-    Just line -> return line
-  where
-    readLine' = do
-      eof <- hIsEOF socket
-      if eof
-        then return EOF
-        else map Line $ hGetLine socket
+awaitLatch :: Latch -> IO ()
+awaitLatch latch = void $ takeMVar latch
 
-listenerLoop :: Int -> IRC ()
-listenerLoop idleFor = do
+type EChannel a = (Chan a, Latch)
+
+data Cmd  = CmdQuit | Cmd !Command deriving (Show, Eq)
+data Line = Timeout | EOF | Line !Message deriving (Show, Eq)
+
+sendCommandLoop :: EChannel Cmd -> Bot -> IO ()
+sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
+  cmd <- readChan commandChan
+  case cmd of
+    CmdQuit     -> latchIt latch
+    Cmd command -> do
+      time <- getCurrentTime
+      let line = lineFromCommand botConfig command
+      TF.hprint socket "{}\r\n" $ TF.Only line
+      TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
+      sendCommandLoop (commandChan, latch) bot
+
+sendCommand :: Chan Cmd -> Cmd -> IO ()
+sendCommand = writeChan
+
+readLineLoop :: MVar BotStatus -> EChannel Line -> Bot -> Int -> IO ()
+readLineLoop mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
+  botStatus <- readMVar mvBotStatus
+  case botStatus of
+    Disconnected -> latchIt latch
+    _            -> do
+      mLine <- timeout timeoutDelay readLine'
+      case mLine of
+        Nothing   -> writeChan lineChan Timeout
+        Just line -> writeChan lineChan line
+      readLineLoop mvBotStatus (lineChan, latch) bot timeoutDelay
+      where
+        readLine' = do
+          eof <- hIsEOF socket
+          if eof
+            then return EOF
+            else do
+              line <- map initEx $ hGetLine socket
+              now <- getCurrentTime
+              return . Line $ msgFromLine botConfig now line
+
+readLine :: Chan Line -> IO Line
+readLine = readChan
+
+listenerLoop :: Chan Line -> Chan Cmd -> Int -> IRC ()
+listenerLoop lineChan commandChan idleFor = do
   status <- get
   bot@Bot { .. } <- ask
   let nick  = botNick botConfig
@@ -61,22 +91,19 @@ listenerLoop idleFor = do
       then return Disconnected
       else do
         when (status == Kicked) $
-          threadDelay (5 * oneSec) >> sendCommand bot JoinCmd
+          threadDelay (5 * oneSec) >> sendCommand commandChan (Cmd JoinCmd)
 
-        mLine <- readLine socket oneSec
+        mLine <- readLine lineChan
         case mLine of
-          Timeout  -> dispatchHandlers bot IdleMsg >> return Idle
-          EOF -> return Disconnected
-          Line line' -> do
-            let line = initEx line'
-            now <- getCurrentTime
-            debug $ "< " ++ line
-
-            let message = msgFromLine botConfig now line
+          Timeout      -> dispatchHandlers bot IdleMsg >> return Idle
+          EOF          -> return Disconnected
+          Line message -> do
+            debug $ "< " ++ msgLine message
             nStatus <- case message of
-              JoinMsg { .. } | userNick user == nick -> debug "Joined"          >> return Joined
-              KickMsg { .. } | kickedNick == nick    -> debug "Kicked"          >> return Kicked
-              ModeMsg { user = Self, .. }            -> sendCommand bot JoinCmd >> return Connected
+              JoinMsg { .. } | userNick user == nick -> debug "Joined" >> return Joined
+              KickMsg { .. } | kickedNick == nick    -> debug "Kicked" >> return Kicked
+              ModeMsg { user = Self, .. }            ->
+                sendCommand commandChan (Cmd JoinCmd) >> return Connected
               _                                      -> return Connected
 
             dispatchHandlers bot message
@@ -84,18 +111,18 @@ listenerLoop idleFor = do
 
   put nStatus
   case nStatus of
-    Idle         -> listenerLoop (idleFor + oneSec)
+    Idle         -> listenerLoop lineChan commandChan (idleFor + oneSec)
     Disconnected -> return ()
-    _            -> listenerLoop 0
+    _            -> listenerLoop lineChan commandChan 0
 
   where
-    dispatchHandlers bot@Bot { .. } message =
+    dispatchHandlers Bot { .. } message =
       forM_ (mapToList msgHandlers) $ \(_, msgHandler) -> fork $
         handle (\(e :: SomeException) -> debug $ "Exception! " ++ pack (show e)) $ do
           mCmd <- runMsgHandler msgHandler botConfig message
           case mCmd of
             Nothing  -> return ()
-            Just cmd -> sendCommand bot cmd
+            Just cmd -> sendCommand commandChan (Cmd cmd)
 
 loadMsgHandlers :: BotConfig -> IO (Map MsgHandlerName MsgHandler)
 loadMsgHandlers botConfig@BotConfig { .. } =
@@ -112,14 +139,21 @@ unloadMsgHandlers Bot { .. } =
     debug $ "Unloading msg handler: " ++ msgHandlerName
     stopMsgHandler msgHandler botConfig
 
-connect :: BotConfig -> IO Bot
+connect :: BotConfig -> IO (Bot, MVar BotStatus, EChannel Line, EChannel Cmd)
 connect botConfig@BotConfig { .. } = do
   debug "Connecting ..."
   socket <- connectToWithRetry
   hSetBuffering socket LineBuffering
   msgHandlers <- loadMsgHandlers botConfig
   debug "Connected"
-  return $ Bot botConfig socket msgHandlers
+
+  lineChan    <- newChan
+  commandChan <- newChan
+  sendLatch   <- newEmptyMVar
+  readLatch   <- newEmptyMVar
+  mvBotStatus <- newMVar Connected
+
+  return (Bot botConfig socket msgHandlers, mvBotStatus, (lineChan, readLatch), (commandChan, sendLatch))
   where
     connectToWithRetry = connectTo (unpack server) (PortNumber (fromIntegral port))
                            `catch` (\(e :: SomeException) -> do
@@ -127,9 +161,14 @@ connect botConfig@BotConfig { .. } = do
                                       threadDelay (5 * oneSec)
                                       connectToWithRetry)
 
-disconnect :: Bot -> IO ()
-disconnect bot@Bot { .. } = do
+disconnect :: (Bot, MVar BotStatus, EChannel Line, EChannel Cmd) -> IO ()
+disconnect (bot@Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch)) = do
   debug "Disconnecting ..."
+  sendCommand commandChan CmdQuit
+  awaitLatch sendLatch
+  swapMVar mvBotStatus Disconnected
+  awaitLatch readLatch
+
   unloadMsgHandlers bot
   hClose socket
   debug "Disconnected"
@@ -150,12 +189,18 @@ run botConfig' = withSocketsDo $ do
     _            -> error "Unsupported status"
   where
     botConfig = addCoreMsgHandlers botConfig'
-    run_ = bracket (connect botConfig) disconnect $ \bot ->
-      go bot `catch` \(e :: SomeException) -> do
-        debug $ "Exception! " ++ pack (show e)
-        return Errored
 
-    go bot = do
-      sendCommand bot NickCmd
-      sendCommand bot UserCmd
-      runIRC bot Connected (listenerLoop 0)
+    handleErrors :: SomeException -> IO BotStatus
+    handleErrors e = do
+      debug $ "Exception! " ++ pack (show e)
+      return Errored
+
+    run_ = bracket (connect botConfig) disconnect $
+      \(bot, mvBotStatus, (lineChan, readLatch), (commandChan, sendLatch)) ->
+        handle handleErrors $ do
+          sendCommand commandChan (Cmd NickCmd)
+          sendCommand commandChan (Cmd UserCmd)
+
+          fork $ sendCommandLoop (commandChan, sendLatch) bot
+          fork $ readLineLoop mvBotStatus (lineChan, readLatch) bot oneSec
+          runIRC bot Connected (listenerLoop lineChan commandChan 0)

@@ -8,12 +8,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Network.IRC.Types
-  (Channel, Nick, MsgHandlerName,
-   User (..), Message (..), Command (..),
-   BotConfig (..), BotStatus (..), Bot (..),
-   IRC, runIRC,
-   MonadMsgHandler, runMsgHandler, stopMsgHandler,
-   MsgHandler (..), newMsgHandler)
+  (Channel, Nick, MsgHandlerName, User (..), Message (..), Command (..),
+   BotConfig (..), BotStatus (..), Bot (..), IRC, runIRC,
+   MsgHandler (..), MonadMsgHandler, newMsgHandler, runMsgHandler, stopMsgHandler)
 where
 
 import ClassyPrelude
