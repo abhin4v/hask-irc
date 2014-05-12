@@ -1,4 +1,7 @@
-{-# LANGUAGE RecordWildCards, ScopedTypeVariables, NoImplicitPrelude, OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.IRC.Client (run) where
 
@@ -10,7 +13,7 @@ import Control.Concurrent.Lifted
 import Control.Monad.Reader hiding (forM_, foldM)
 import Control.Monad.State hiding (forM_, foldM)
 import Network
-import System.IO (hSetBuffering, BufferMode(..))
+import System.IO (hIsEOF, hSetBuffering, BufferMode(..))
 import System.Timeout
 
 import Network.IRC.Handlers
@@ -32,6 +35,21 @@ sendCommand Bot { .. } reply = do
   TF.hprint socket "{}\r\n" $ TF.Only line
   TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
 
+data Line = Timeout | EOF | Line !Text deriving (Show, Eq)
+
+readLine :: Handle -> Int -> IO Line
+readLine socket timeoutDelay = do
+  mLine <- timeout timeoutDelay readLine'
+  case mLine of
+    Nothing   -> return Timeout
+    Just line -> return line
+  where
+    readLine' = do
+      eof <- hIsEOF socket
+      if eof
+        then return EOF
+        else map Line $ hGetLine socket
+
 listenerLoop :: Int -> IRC ()
 listenerLoop idleFor = do
   status <- get
@@ -45,10 +63,12 @@ listenerLoop idleFor = do
         when (status == Kicked) $
           threadDelay (5 * oneSec) >> sendCommand bot JoinCmd
 
-        mLine <- map (map initEx) . timeout oneSec . hGetLine $ socket
+        mLine <- readLine socket oneSec
         case mLine of
-          Nothing -> dispatchHandlers bot IdleMsg >> return Idle
-          Just line -> do
+          Timeout  -> dispatchHandlers bot IdleMsg >> return Idle
+          EOF -> return Disconnected
+          Line line' -> do
+            let line = initEx line'
             now <- getCurrentTime
             debug $ "< " ++ line
 

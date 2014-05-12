@@ -1,5 +1,11 @@
-{-# LANGUAGE RecordWildCards, RankNTypes, GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE NoImplicitPrelude, OverloadedStrings, FlexibleContexts #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.IRC.Types
   (Channel, Nick, MsgHandlerName,

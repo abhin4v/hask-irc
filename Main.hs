@@ -1,4 +1,6 @@
-{-# LANGUAGE OverloadedStrings, OverlappingInstances, NoImplicitPrelude #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main (main) where
 
