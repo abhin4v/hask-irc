@@ -108,4 +108,8 @@ messageLogger NickMsg { .. } = withLogFile $ \logFile ->
   TF.hprint logFile "[{}] ** {} CHANGED NICK TO {}\n" $
     TF.buildParams (fmtTime msgTime, userNick user, nick)
 
+--messageLogger IdleMsg = const . liftIO $ do
+--  now <- getCurrentTime
+--  return . Just . MessageCmd $
+
 messageLogger _ = const $ return Nothing

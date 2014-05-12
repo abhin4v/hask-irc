@@ -50,6 +50,7 @@ data Command =
   | NickCmd
   | UserCmd
   | JoinCmd
+  | MessageCmd Message
   deriving (Show, Eq)
 
 data BotConfig = BotConfig { server          :: !Text

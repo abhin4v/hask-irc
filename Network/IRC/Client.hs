@@ -80,6 +80,9 @@ readLineLoop mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
 readLine :: Chan Line -> IO Line
 readLine = readChan
 
+sendMessage :: Chan Line -> Message -> IO ()
+sendMessage = (. Line) . writeChan
+
 listenerLoop :: Chan Line -> Chan Cmd -> Int -> IRC ()
 listenerLoop lineChan commandChan idleFor = do
   status <- get
@@ -122,7 +125,9 @@ listenerLoop lineChan commandChan idleFor = do
           mCmd <- runMsgHandler msgHandler botConfig message
           case mCmd of
             Nothing  -> return ()
-            Just cmd -> sendCommand commandChan (Cmd cmd)
+            Just cmd -> case cmd of
+              MessageCmd msg -> sendMessage lineChan msg
+              _              -> sendCommand commandChan (Cmd cmd)
 
 loadMsgHandlers :: BotConfig -> IO (Map MsgHandlerName MsgHandler)
 loadMsgHandlers botConfig@BotConfig { .. } =
