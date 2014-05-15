@@ -9,6 +9,7 @@ import qualified Data.Text.Format as TF
 import qualified Data.Text.Format.Params as TF
 
 import ClassyPrelude
+import Control.Exception.Lifted
 import Control.Concurrent.Lifted
 import Control.Monad.Reader hiding (forM_, foldM)
 import Control.Monad.State hiding (forM_, foldM)
@@ -74,6 +75,7 @@ readLineLoop mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
             then return EOF
             else do
               line <- map initEx $ hGetLine socket
+              debug $ "< " ++ line
               now <- getCurrentTime
               return . Line $ msgFromLine botConfig now line
 
@@ -101,7 +103,6 @@ listenerLoop lineChan commandChan idleFor = do
           Timeout      -> dispatchHandlers bot IdleMsg >> return Idle
           EOF          -> return Disconnected
           Line message -> do
-            debug $ "< " ++ msgLine message
             nStatus <- case message of
               JoinMsg { .. } | userNick user == nick -> debug "Joined" >> return Joined
               KickMsg { .. } | kickedNick == nick    -> debug "Kicked" >> return Kicked
@@ -190,15 +191,16 @@ run botConfig' = withSocketsDo $ do
   status <- run_
   case status of
     Disconnected -> debug "Connection timed out" >> run botConfig
-    Errored      -> return ()
+    Interrupted  -> return ()
+    Errored      -> debug "Errored, restarting" >> run botConfig
     _            -> error "Unsupported status"
   where
     botConfig = addCoreMsgHandlers botConfig'
 
     handleErrors :: SomeException -> IO BotStatus
-    handleErrors e = do
-      debug $ "Exception! " ++ pack (show e)
-      return Errored
+    handleErrors e = case fromException e of
+        Just UserInterrupt -> debug "User interrupt" >> return Interrupted
+        _                  -> debug ("Exception! " ++ pack (show e)) >> return Errored
 
     run_ = bracket (connect botConfig) disconnect $
       \(bot, mvBotStatus, (lineChan, readLatch), (commandChan, sendLatch)) ->

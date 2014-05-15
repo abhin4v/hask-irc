@@ -37,7 +37,7 @@ msgFromLine (BotConfig { .. }) time line
     command        = splits !! 1
     message        = drop 1 . unwords . drop 3 $ splits
     quitMessage    = drop 1 . unwords . drop 2 $ splits
-    user           = let u = split (== '!') source in User (u !! 0) (u !! 1)
+    user           = uncurry User . break (== '!') $ source
     mode           = splits !! 3
     modeArgs       = drop 4 splits
     kicked         = splits !! 3

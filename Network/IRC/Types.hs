@@ -73,7 +73,7 @@ data Bot = Bot { botConfig   :: !BotConfig
                , socket      :: !Handle
                , msgHandlers :: !(Map MsgHandlerName MsgHandler) }
 
-data BotStatus = Connected | Disconnected | Joined | Kicked | Errored | Idle
+data BotStatus = Connected | Disconnected | Joined | Kicked | Errored | Idle | Interrupted
                  deriving (Show, Eq)
 
 newtype IRC a = IRC { _runIRC :: StateT BotStatus (ReaderT Bot IO) a }
