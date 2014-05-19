@@ -10,7 +10,8 @@ import qualified Data.Configurator as C
 import qualified Data.Text.Format as TF
 import qualified Data.Text.Format.Params as TF
 
-import ClassyPrelude hiding (try, (</>), (<.>), FilePath)
+import ClassyPrelude hiding (try, (</>), (<.>), FilePath, log)
+import Control.Exception.Lifted
 import Control.Monad.Reader
 import Data.Time (diffDays)
 import System.Directory
@@ -33,7 +34,7 @@ getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do
   logFileDir <- C.require config "messagelogger.logdir"
   createDirectoryIfMissing True logFileDir
-  return $ logFileDir </> unpack botNick <.> "log"
+  return $ logFileDir </> unpack (channel ++ "-" ++ botNick) <.> "log"
 
 openLogFile :: FilePath -> IO Handle
 openLogFile logFilePath = do
@@ -67,8 +68,9 @@ withLogFile action state = do
       then do
         hClose logFileHandle
         logFilePath <- getLogFilePath botConfig
-        copyFile logFilePath (logFilePath <.> show prevDay)
-        removeFile logFilePath
+        mask_ $ do
+          copyFile logFilePath (logFilePath <.> show prevDay)
+          removeFile logFilePath
         openLogFile logFilePath
       else return logFileHandle
 
@@ -77,39 +79,24 @@ withLogFile action state = do
 
   return Nothing
 
-fmtTime :: UTCTime -> String
-fmtTime = formatTime defaultTimeLocale "%F %T"
-
 messageLogger :: MonadMsgHandler m => Message -> IORef LoggerState -> m (Maybe Command)
-messageLogger ChannelMsg { .. } = withLogFile $ \logFile ->
-  TF.hprint logFile "[{}] {}: {}\n" $ TF.buildParams (fmtTime msgTime, userNick user, msg)
+messageLogger message = go message
+  where
+    go ChannelMsg { .. } = log "<{}> {}"                  [userNick user, msg]
+    go ActionMsg { .. }  = log "<{}> {} {}"               [userNick user, userNick user, msg]
+    go KickMsg { .. }    = log "** {} KICKED {} :{}"      [userNick user, kickedNick, msg]
+    go JoinMsg { .. }    = log "** {} JOINED"             [userNick user]
+    go PartMsg { .. }    = log "** {} PARTED :{}"         [userNick user, msg]
+    go QuitMsg { .. }    = log "** {} QUIT :{}"           [userNick user, msg]
+    go NickMsg { .. }    = log "** {} CHANGED NICK TO {}" [userNick user, nick]
+    go NamesMsg { .. }   = log "** USERS {}"              [unwords nicks]
+    go _                 = const $ return Nothing
 
-messageLogger ActionMsg { .. } = withLogFile $ \logFile ->
-  TF.hprint logFile "[{}] {}: {} {}\n" $
-    TF.buildParams (fmtTime msgTime, userNick user, userNick user, msg)
+    log format args = withLogFile $ \logFile ->
+      TF.hprint logFile ("[{}] " ++ format ++ "\n") $ TF.buildParams (fmtTime (msgTime message) : args)
 
-messageLogger KickMsg { .. } = withLogFile $ \logFile ->
-  TF.hprint logFile "[{}] ** {} KICKED {} :{}\n" $
-    TF.buildParams (fmtTime msgTime, userNick user, kickedNick, msg)
-
-messageLogger JoinMsg { .. } = withLogFile $ \logFile ->
-  TF.hprint logFile "[{}] ** {} JOINED\n" $
-    TF.buildParams (fmtTime msgTime, userNick user)
-
-messageLogger PartMsg { .. } = withLogFile $ \logFile ->
-  TF.hprint logFile "[{}] ** {} PARTED :{}\n" $
-    TF.buildParams (fmtTime msgTime, userNick user, msg)
-
-messageLogger QuitMsg { .. } = withLogFile $ \logFile ->
-  TF.hprint logFile "[{}] ** {} QUIT :{}\n" $
-    TF.buildParams (fmtTime msgTime, userNick user, msg)
-
-messageLogger NickMsg { .. } = withLogFile $ \logFile ->
-  TF.hprint logFile "[{}] ** {} CHANGED NICK TO {}\n" $
-    TF.buildParams (fmtTime msgTime, userNick user, nick)
+    fmtTime = pack . formatTime defaultTimeLocale "%F %T"
 
 --messageLogger IdleMsg = const . liftIO $ do
 --  now <- getCurrentTime
 --  return . Just . MessageCmd $
-
-messageLogger _ = const $ return Nothing

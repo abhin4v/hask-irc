@@ -26,30 +26,36 @@ data User = Self | User { userNick :: !Nick, userServer :: !Text }
             deriving (Show, Eq)
 
 data Message =
-    IdleMsg
-  | ChannelMsg { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
-  | PrivMsg    { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
-  | ActionMsg  { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
-  | Ping       { msgTime  :: !UTCTime, msg    :: !Text, msgLine     :: !Text }
-  | JoinMsg    { msgTime  :: !UTCTime, user   :: !User, msgLine     :: !Text }
-  | QuitMsg    { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
-  | PartMsg    { msgTime  :: !UTCTime, user   :: !User, msg         :: !Text, msgLine :: !Text }
-  | ModeMsg    { msgTime  :: !UTCTime, user   :: !User, target      :: !Text, mode    :: !Text
-               , modeArgs :: ![Text], msgLine :: !Text }
-  | NickMsg    { msgTime  :: !UTCTime, user   :: !User, nick        :: !Text, msgLine :: !Text }
-  | KickMsg    { msgTime  :: !UTCTime, user   :: !User, kickedNick  :: !Text, msg     :: !Text
-               , msgLine  :: !Text }
-  | OtherMsg   { msgTime  :: !UTCTime, source :: !Text, command     :: !Text, target  :: !Text
-               , msg      :: !Text,   msgLine :: !Text }
+    IdleMsg      { msgTime  :: !UTCTime}
+  | PingMsg      { msgTime  :: !UTCTime, msg     :: !Text, msgLine     :: !Text }
+  | PongMsg      { msgTime  :: !UTCTime, msg     :: !Text, msgLine     :: !Text }
+  | ChannelMsg   { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
+  | PrivMsg      { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
+  | ActionMsg    { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
+  | JoinMsg      { msgTime  :: !UTCTime, user    :: !User, msgLine     :: !Text }
+  | QuitMsg      { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
+  | PartMsg      { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
+  | NickMsg      { msgTime  :: !UTCTime, user    :: !User, nick        :: !Nick, msgLine :: !Text }
+  | NickInUseMsg { msgTime  :: !UTCTime, msgLine :: !Text }
+  | KickMsg      { msgTime  :: !UTCTime, user    :: !User, kickedNick  :: !Nick, msg     :: !Text
+                 , msgLine  :: !Text }
+  | ModeMsg      { msgTime  :: !UTCTime, user    :: !User, target      :: !Text, mode    :: !Text
+                 , modeArgs :: ![Text], msgLine  :: !Text }
+  | NamesMsg     { msgTime  :: !UTCTime, nicks   :: ![Nick] }
+  | OtherMsg     { msgTime  :: !UTCTime, source  :: !Text, command     :: !Text, target  :: !Text
+                 , msg      :: !Text,   msgLine  :: !Text }
   deriving (Show, Eq)
 
 data Command =
-    Pong            { rmsg  :: !Text }
+    PingCmd         { rmsg  :: !Text }
+  | PongCmd         { rmsg  :: !Text }
   | ChannelMsgReply { rmsg  :: !Text }
   | PrivMsgReply    { ruser :: !User, rmsg :: !Text }
   | NickCmd
   | UserCmd
   | JoinCmd
+  | QuitCmd
+  | NamesCmd
   | MessageCmd Message
   deriving (Show, Eq)
 
@@ -73,8 +79,15 @@ data Bot = Bot { botConfig   :: !BotConfig
                , socket      :: !Handle
                , msgHandlers :: !(Map MsgHandlerName MsgHandler) }
 
-data BotStatus = Connected | Disconnected | Joined | Kicked | Errored | Idle | Interrupted
-                 deriving (Show, Eq)
+data BotStatus = Connected
+               | Disconnected
+               | Joined
+               | Kicked
+               | Errored
+               | Idle
+               | Interrupted
+               | NickNotAvailable
+               deriving (Show, Eq)
 
 newtype IRC a = IRC { _runIRC :: StateT BotStatus (ReaderT Bot IO) a }
                 deriving ( Functor

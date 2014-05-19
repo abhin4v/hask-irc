@@ -10,7 +10,9 @@ import qualified Network.IRC.Handlers.SongSearch as SS
 
 import ClassyPrelude
 import Control.Monad.Reader.Class
+import Data.Convertible
 import Data.Text (strip)
+import Data.Time (addUTCTime)
 
 import Network.IRC.Types
 
@@ -21,18 +23,35 @@ coreMsgHandlerNames :: [Text]
 coreMsgHandlerNames = ["pingpong", "messagelogger"]
 
 mkMsgHandler :: BotConfig -> MsgHandlerName -> IO (Maybe MsgHandler)
-mkMsgHandler _ "greeter"  = return . Just $ newMsgHandler { msgHandlerRun = greeter }
-mkMsgHandler _ "welcomer" = return . Just $ newMsgHandler { msgHandlerRun = welcomer }
-mkMsgHandler _ "pingpong" = return . Just $ newMsgHandler { msgHandlerRun = pingPong }
-mkMsgHandler botConfig name       =
+mkMsgHandler _ "greeter"    = return . Just $ newMsgHandler { msgHandlerRun = greeter }
+mkMsgHandler _ "welcomer"   = return . Just $ newMsgHandler { msgHandlerRun = welcomer }
+
+mkMsgHandler _ "pingpong"   = do
+  state <- getCurrentTime >>= newIORef
+  return . Just $ newMsgHandler { msgHandlerRun = pingPong state }
+
+mkMsgHandler botConfig name =
   flip (`foldM` Nothing) [L.mkMsgHandler, SS.mkMsgHandler] $ \acc h ->
     case acc of
       Just _  -> return acc
       Nothing -> h botConfig name
 
-pingPong :: MonadMsgHandler m => Message -> m (Maybe Command)
-pingPong Ping { .. } = return . Just $ Pong msg
-pingPong _           = return Nothing
+pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m (Maybe Command)
+pingPong state PingMsg { .. } = do
+  liftIO $ atomicWriteIORef state msgTime
+  return . Just $ PongCmd msg
+pingPong state PongMsg { .. } = do
+  liftIO $ atomicWriteIORef state msgTime
+  return Nothing
+pingPong state IdleMsg { .. } | even (convert msgTime :: Int) = do
+  BotConfig { .. } <- ask
+  let limit = fromIntegral $ botTimeout `div` 2
+  liftIO $ do
+    lastComm <- readIORef state
+    if addUTCTime limit lastComm < msgTime
+      then return . Just . PingCmd . pack . formatTime defaultTimeLocale "%s" $ msgTime
+      else return Nothing
+pingPong _ _          = return Nothing
 
 greeter ::  MonadMsgHandler m => Message -> m (Maybe Command)
 greeter ChannelMsg { .. } = case find (== clean msg) greetings of

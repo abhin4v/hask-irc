@@ -12,8 +12,9 @@ import Network.IRC.Types
 
 msgFromLine :: BotConfig -> UTCTime -> Text -> Message
 msgFromLine (BotConfig { .. }) time line
-  | "PING :" `isPrefixOf` line = Ping time (drop 6 line) line
+  | "PING :" `isPrefixOf` line = PingMsg time (drop 6 line) line
   | otherwise = case command of
+      "PONG"    -> PongMsg time message line
       "JOIN"    -> JoinMsg time user line
       "QUIT"    -> QuitMsg time user quitMessage line
       "PART"    -> PartMsg time user message line
@@ -27,27 +28,38 @@ msgFromLine (BotConfig { .. }) time line
           then ActionMsg time user (initDef . drop 8 $ message) line
           else ChannelMsg time user message line
         else PrivMsg time user message line
+      "353"     -> NamesMsg time namesNicks
+      "433"     -> NickInUseMsg time line
       _         -> OtherMsg time source command target message line
   where
-    isSpc          = (== ' ')
-    isNotSpc       = not . isSpc
-    splits         = split isSpc line
-    source         = drop 1 . takeWhile isNotSpc $ line
-    target         = splits !! 2
-    command        = splits !! 1
-    message        = drop 1 . unwords . drop 3 $ splits
-    quitMessage    = drop 1 . unwords . drop 2 $ splits
-    user           = uncurry User . break (== '!') $ source
-    mode           = splits !! 3
-    modeArgs       = drop 4 splits
-    kicked         = splits !! 3
-    kickReason     = drop 1 . unwords . drop 4 $ splits
+    isSpc           = (== ' ')
+    isNotSpc        = not . isSpc
+    splits          = split isSpc line
+    source          = drop 1 . takeWhile isNotSpc $ line
+    target          = splits !! 2
+    command         = splits !! 1
+    message         = drop 1 . unwords . drop 3 $ splits
+    quitMessage     = drop 1 . unwords . drop 2 $ splits
+    user            = uncurry User . break (== '!') $ source
+    mode            = splits !! 3
+    modeArgs        = drop 4 splits
+    kicked          = splits !! 3
+    kickReason      = drop 1 . unwords . drop 4 $ splits
+
+    nickPrefixes :: String
+    nickPrefixes    = "~&@%+"
+    namesNicks      = map stripNickPrefix . words . drop 1 . unwords . drop 5 $ splits
+    stripNickPrefix = pack . dropWhile (`elem` nickPrefixes) . unpack
 
 lineFromCommand :: BotConfig -> Command -> Text
-lineFromCommand (BotConfig { .. }) reply = case reply of
-  Pong { .. }                     -> "PONG :" ++ rmsg
+lineFromCommand (BotConfig { .. }) command = case command of
+  PongCmd { .. }                  -> "PONG :" ++ rmsg
+  PingCmd { .. }                  -> "PING :" ++ rmsg
   NickCmd                         -> "NICK " ++ botNick
   UserCmd                         -> "USER " ++ botNick ++ " 0 * :" ++ botNick
   JoinCmd                         -> "JOIN " ++ channel
+  QuitCmd                         -> "QUIT"
   ChannelMsgReply { .. }          -> "PRIVMSG " ++ channel ++ " :" ++ rmsg
   PrivMsgReply (User { .. }) rmsg -> "PRIVMSG " ++ botNick ++ " :" ++ rmsg
+  NamesCmd                        -> "NAMES " ++ channel
+  _                               -> error $ "Unsupported command " ++ show command

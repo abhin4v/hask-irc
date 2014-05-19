@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -39,22 +40,20 @@ awaitLatch latch = void $ takeMVar latch
 
 type EChannel a = (Chan a, Latch)
 
-data Cmd  = CmdQuit | Cmd !Command deriving (Show, Eq)
 data Line = Timeout | EOF | Line !Message deriving (Show, Eq)
 
-sendCommandLoop :: EChannel Cmd -> Bot -> IO ()
+sendCommandLoop :: EChannel Command -> Bot -> IO ()
 sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
   cmd <- readChan commandChan
+  time <- getCurrentTime
+  let line = lineFromCommand botConfig cmd
+  TF.hprint socket "{}\r\n" $ TF.Only line
+  TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
   case cmd of
-    CmdQuit     -> latchIt latch
-    Cmd command -> do
-      time <- getCurrentTime
-      let line = lineFromCommand botConfig command
-      TF.hprint socket "{}\r\n" $ TF.Only line
-      TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
-      sendCommandLoop (commandChan, latch) bot
+    QuitCmd -> latchIt latch
+    _       -> sendCommandLoop (commandChan, latch) bot
 
-sendCommand :: Chan Cmd -> Cmd -> IO ()
+sendCommand :: Chan Command -> Command -> IO ()
 sendCommand = writeChan
 
 readLineLoop :: MVar BotStatus -> EChannel Line -> Bot -> Int -> IO ()
@@ -85,29 +84,31 @@ readLine = readChan
 sendMessage :: Chan Line -> Message -> IO ()
 sendMessage = (. Line) . writeChan
 
-listenerLoop :: Chan Line -> Chan Cmd -> Int -> IRC ()
-listenerLoop lineChan commandChan idleFor = do
+listenerLoop :: Chan Line -> Chan Command -> Int -> IRC ()
+listenerLoop lineChan commandChan !idleFor = do
   status <- get
   bot@Bot { .. } <- ask
   let nick  = botNick botConfig
 
-  nStatus <- liftIO $
+  nStatus <- liftIO . mask_ $
     if idleFor >= (oneSec * botTimeout botConfig)
-      then return Disconnected
+      then debug "Timeout" >> return Disconnected
       else do
         when (status == Kicked) $
-          threadDelay (5 * oneSec) >> sendCommand commandChan (Cmd JoinCmd)
+          threadDelay (5 * oneSec) >> sendCommand commandChan JoinCmd
 
         mLine <- readLine lineChan
         case mLine of
-          Timeout      -> dispatchHandlers bot IdleMsg >> return Idle
-          EOF          -> return Disconnected
+          Timeout      -> getCurrentTime >>= dispatchHandlers bot . IdleMsg  >> return Idle
+          EOF          -> debug "Connection closed" >> return Disconnected
           Line message -> do
             nStatus <- case message of
               JoinMsg { .. } | userNick user == nick -> debug "Joined" >> return Joined
               KickMsg { .. } | kickedNick == nick    -> debug "Kicked" >> return Kicked
+              NickInUseMsg { .. }                    ->
+                debug "Nick already in use"     >> return NickNotAvailable
               ModeMsg { user = Self, .. }            ->
-                sendCommand commandChan (Cmd JoinCmd) >> return Connected
+                sendCommand commandChan JoinCmd >> return Connected
               _                                      -> return Connected
 
             dispatchHandlers bot message
@@ -115,9 +116,10 @@ listenerLoop lineChan commandChan idleFor = do
 
   put nStatus
   case nStatus of
-    Idle         -> listenerLoop lineChan commandChan (idleFor + oneSec)
-    Disconnected -> return ()
-    _            -> listenerLoop lineChan commandChan 0
+    Idle             -> listenerLoop lineChan commandChan (idleFor + oneSec)
+    Disconnected     -> return ()
+    NickNotAvailable -> return ()
+    _                -> listenerLoop lineChan commandChan 0
 
   where
     dispatchHandlers Bot { .. } message =
@@ -128,7 +130,7 @@ listenerLoop lineChan commandChan idleFor = do
             Nothing  -> return ()
             Just cmd -> case cmd of
               MessageCmd msg -> sendMessage lineChan msg
-              _              -> sendCommand commandChan (Cmd cmd)
+              _              -> sendCommand commandChan cmd
 
 loadMsgHandlers :: BotConfig -> IO (Map MsgHandlerName MsgHandler)
 loadMsgHandlers botConfig@BotConfig { .. } =
@@ -145,7 +147,7 @@ unloadMsgHandlers Bot { .. } =
     debug $ "Unloading msg handler: " ++ msgHandlerName
     stopMsgHandler msgHandler botConfig
 
-connect :: BotConfig -> IO (Bot, MVar BotStatus, EChannel Line, EChannel Cmd)
+connect :: BotConfig -> IO (Bot, MVar BotStatus, EChannel Line, EChannel Command)
 connect botConfig@BotConfig { .. } = do
   debug "Connecting ..."
   socket <- connectToWithRetry
@@ -167,10 +169,10 @@ connect botConfig@BotConfig { .. } = do
                                       threadDelay (5 * oneSec)
                                       connectToWithRetry)
 
-disconnect :: (Bot, MVar BotStatus, EChannel Line, EChannel Cmd) -> IO ()
+disconnect :: (Bot, MVar BotStatus, EChannel Line, EChannel Command) -> IO ()
 disconnect (bot@Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch)) = do
   debug "Disconnecting ..."
-  sendCommand commandChan CmdQuit
+  sendCommand commandChan QuitCmd
   awaitLatch sendLatch
   swapMVar mvBotStatus Disconnected
   awaitLatch readLatch
@@ -190,10 +192,11 @@ run botConfig' = withSocketsDo $ do
   print botConfig
   status <- run_
   case status of
-    Disconnected -> debug "Connection timed out" >> run botConfig
-    Interrupted  -> return ()
-    Errored      -> debug "Errored, restarting" >> run botConfig
-    _            -> error "Unsupported status"
+    Disconnected     -> debug "Restarting .." >> run botConfig
+    Interrupted      -> return ()
+    NickNotAvailable -> return ()
+    Errored          -> debug "Restarting .." >> run botConfig
+    _                -> error "Unsupported status"
   where
     botConfig = addCoreMsgHandlers botConfig'
 
@@ -205,8 +208,8 @@ run botConfig' = withSocketsDo $ do
     run_ = bracket (connect botConfig) disconnect $
       \(bot, mvBotStatus, (lineChan, readLatch), (commandChan, sendLatch)) ->
         handle handleErrors $ do
-          sendCommand commandChan (Cmd NickCmd)
-          sendCommand commandChan (Cmd UserCmd)
+          sendCommand commandChan NickCmd
+          sendCommand commandChan UserCmd
 
           fork $ sendCommandLoop (commandChan, sendLatch) bot
           fork $ readLineLoop mvBotStatus (lineChan, readLatch) bot oneSec
