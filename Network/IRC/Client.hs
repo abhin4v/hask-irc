@@ -44,11 +44,14 @@ data Line = Timeout | EOF | Line !Message deriving (Show, Eq)
 
 sendCommandLoop :: EChannel Command -> Bot -> IO ()
 sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
-  cmd <- readChan commandChan
-  time <- getCurrentTime
-  let line = lineFromCommand botConfig cmd
-  TF.hprint socket "{}\r\n" $ TF.Only line
-  TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
+  cmd       <- readChan commandChan
+  time      <- getCurrentTime
+  let mline = lineFromCommand botConfig cmd
+  case mline of
+    Nothing   -> return ()
+    Just line -> do
+      TF.hprint socket "{}\r\n" $ TF.Only line
+      TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
   case cmd of
     QuitCmd -> latchIt latch
     _       -> sendCommandLoop (commandChan, latch) bot
@@ -86,9 +89,9 @@ sendMessage = (. Line) . writeChan
 
 listenerLoop :: Chan Line -> Chan Command -> Int -> IRC ()
 listenerLoop lineChan commandChan !idleFor = do
-  status <- get
+  status         <- get
   bot@Bot { .. } <- ask
-  let nick  = botNick botConfig
+  let nick       = botNick botConfig
 
   nStatus <- liftIO . mask_ $
     if idleFor >= (oneSec * botTimeout botConfig)
@@ -127,10 +130,9 @@ listenerLoop lineChan commandChan !idleFor = do
         handle (\(e :: SomeException) -> debug $ "Exception! " ++ pack (show e)) $ do
           mCmd <- runMsgHandler msgHandler botConfig message
           case mCmd of
-            Nothing  -> return ()
-            Just cmd -> case cmd of
-              MessageCmd msg -> sendMessage lineChan msg
-              _              -> sendCommand commandChan cmd
+            Nothing               -> return ()
+            Just (MessageCmd msg) -> sendMessage lineChan msg
+            Just cmd              -> sendCommand commandChan cmd
 
 loadMsgHandlers :: BotConfig -> IO (Map MsgHandlerName MsgHandler)
 loadMsgHandlers botConfig@BotConfig { .. } =
@@ -202,7 +204,7 @@ run botConfig' = withSocketsDo $ do
 
     handleErrors :: SomeException -> IO BotStatus
     handleErrors e = case fromException e of
-        Just UserInterrupt -> debug "User interrupt" >> return Interrupted
+        Just UserInterrupt -> debug "User interrupt"                 >> return Interrupted
         _                  -> debug ("Exception! " ++ pack (show e)) >> return Errored
 
     run_ = bracket (connect botConfig) disconnect $

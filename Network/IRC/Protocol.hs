@@ -20,16 +20,14 @@ msgFromLine (BotConfig { .. }) time line
       "PART"    -> PartMsg time user message line
       "KICK"    -> KickMsg time user kicked kickReason line
       "MODE"    -> if source == botNick
-        then ModeMsg time Self target message [] line
-        else ModeMsg time user target mode modeArgs line
+                     then ModeMsg time Self target message [] line
+                     else ModeMsg time user target mode modeArgs line
       "NICK"    -> NickMsg time user (drop 1 target) line
-      "PRIVMSG" -> if target == channel
-        then if "\x01" `isPrefixOf` message && "ACTION" `isPrefixOf` drop 1 message
-          then ActionMsg time user (initDef . drop 8 $ message) line
-          else ChannelMsg time user message line
-        else PrivMsg time user message line
       "353"     -> NamesMsg time namesNicks
       "433"     -> NickInUseMsg time line
+      "PRIVMSG" | target /= channel -> PrivMsg time user message line
+                | isActionMsg       -> ActionMsg time user (initDef . drop 8 $ message) line
+                | otherwise         -> ChannelMsg time user message line
       _         -> OtherMsg time source command target message line
   where
     isSpc           = (== ' ')
@@ -51,15 +49,17 @@ msgFromLine (BotConfig { .. }) time line
     namesNicks      = map stripNickPrefix . words . drop 1 . unwords . drop 5 $ splits
     stripNickPrefix = pack . dropWhile (`elem` nickPrefixes) . unpack
 
-lineFromCommand :: BotConfig -> Command -> Text
-lineFromCommand (BotConfig { .. }) command = case command of
-  PongCmd { .. }                  -> "PONG :" ++ rmsg
-  PingCmd { .. }                  -> "PING :" ++ rmsg
-  NickCmd                         -> "NICK " ++ botNick
-  UserCmd                         -> "USER " ++ botNick ++ " 0 * :" ++ botNick
-  JoinCmd                         -> "JOIN " ++ channel
-  QuitCmd                         -> "QUIT"
-  ChannelMsgReply { .. }          -> "PRIVMSG " ++ channel ++ " :" ++ rmsg
-  PrivMsgReply (User { .. }) rmsg -> "PRIVMSG " ++ botNick ++ " :" ++ rmsg
-  NamesCmd                        -> "NAMES " ++ channel
-  _                               -> error $ "Unsupported command " ++ show command
+    isActionMsg     = "\SOH" `isPrefixOf` message && "ACTION" `isPrefixOf` drop 1 message
+
+lineFromCommand :: BotConfig -> Command -> Maybe Text
+lineFromCommand BotConfig { .. } command = case command of
+  PongCmd { .. }                  -> Just $ "PONG :" ++ rmsg
+  PingCmd { .. }                  -> Just $ "PING :" ++ rmsg
+  NickCmd                         -> Just $ "NICK " ++ botNick
+  UserCmd                         -> Just $ "USER " ++ botNick ++ " 0 * :" ++ botNick
+  JoinCmd                         -> Just $ "JOIN " ++ channel
+  QuitCmd                         -> Just "QUIT"
+  ChannelMsgReply { .. }          -> Just $ "PRIVMSG " ++ channel ++ " :" ++ rmsg
+  PrivMsgReply (User { .. }) rmsg -> Just $ "PRIVMSG " ++ botNick ++ " :" ++ rmsg
+  NamesCmd                        -> Just $ "NAMES " ++ channel
+  _                               -> Nothing

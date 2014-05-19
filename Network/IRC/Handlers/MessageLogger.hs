@@ -28,7 +28,7 @@ mkMsgHandler botConfig "messagelogger" = do
   initMessageLogger botConfig state
   return . Just $ newMsgHandler { msgHandlerRun  = flip messageLogger state
                                 , msgHandlerStop = exitMessageLogger state }
-mkMsgHandler _  _            = return Nothing
+mkMsgHandler _  _                      = return Nothing
 
 getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do
@@ -46,25 +46,24 @@ initMessageLogger :: BotConfig -> IORef LoggerState -> IO ()
 initMessageLogger botConfig state = do
   logFilePath   <- getLogFilePath botConfig
   logFileHandle <- openLogFile logFilePath
-  time <- getModificationTime logFilePath
+  time          <- getModificationTime logFilePath
   atomicWriteIORef state $ Just (logFileHandle, utctDay time)
 
 exitMessageLogger :: MonadMsgHandler m => IORef LoggerState -> m ()
 exitMessageLogger state = liftIO $ do
   mHandle <- readIORef state
   case mHandle of
-    Nothing                        -> return ()
-    Just (logFileHandle, _ :: Day) -> hClose logFileHandle
+    Nothing                 -> return ()
+    Just (logFileHandle, _) -> hClose logFileHandle
 
 withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> IORef LoggerState -> m (Maybe Command)
 withLogFile action state = do
   botConfig <- ask
-
   liftIO $ do
     Just (logFileHandle, prevDay) <- readIORef state
-    curDay <- map utctDay getCurrentTime
-    let diff = diffDays curDay prevDay
-    logFileHandle' <- if diff >= 1
+    curDay                        <- map utctDay getCurrentTime
+    let diff                      = diffDays curDay prevDay
+    logFileHandle'                <- if diff >= 1
       then do
         hClose logFileHandle
         logFilePath <- getLogFilePath botConfig
@@ -80,18 +79,17 @@ withLogFile action state = do
   return Nothing
 
 messageLogger :: MonadMsgHandler m => Message -> IORef LoggerState -> m (Maybe Command)
-messageLogger message = go message
+messageLogger message = case message of
+  ChannelMsg { .. } -> log "<{}> {}"                  [userNick user, msg]
+  ActionMsg { .. }  -> log "<{}> {} {}"               [userNick user, userNick user, msg]
+  KickMsg { .. }    -> log "** {} KICKED {} :{}"      [userNick user, kickedNick, msg]
+  JoinMsg { .. }    -> log "** {} JOINED"             [userNick user]
+  PartMsg { .. }    -> log "** {} PARTED :{}"         [userNick user, msg]
+  QuitMsg { .. }    -> log "** {} QUIT :{}"           [userNick user, msg]
+  NickMsg { .. }    -> log "** {} CHANGED NICK TO {}" [userNick user, nick]
+  NamesMsg { .. }   -> log "** USERS {}"              [unwords nicks]
+  _                 -> const $ return Nothing
   where
-    go ChannelMsg { .. } = log "<{}> {}"                  [userNick user, msg]
-    go ActionMsg { .. }  = log "<{}> {} {}"               [userNick user, userNick user, msg]
-    go KickMsg { .. }    = log "** {} KICKED {} :{}"      [userNick user, kickedNick, msg]
-    go JoinMsg { .. }    = log "** {} JOINED"             [userNick user]
-    go PartMsg { .. }    = log "** {} PARTED :{}"         [userNick user, msg]
-    go QuitMsg { .. }    = log "** {} QUIT :{}"           [userNick user, msg]
-    go NickMsg { .. }    = log "** {} CHANGED NICK TO {}" [userNick user, nick]
-    go NamesMsg { .. }   = log "** USERS {}"              [unwords nicks]
-    go _                 = const $ return Nothing
-
     log format args = withLogFile $ \logFile ->
       TF.hprint logFile ("[{}] " ++ format ++ "\n") $ TF.buildParams (fmtTime (msgTime message) : args)
 

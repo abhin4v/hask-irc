@@ -8,9 +8,22 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Network.IRC.Types
-  (Channel, Nick, MsgHandlerName, User (..), Message (..), Command (..),
-   BotConfig (..), BotStatus (..), Bot (..), IRC, runIRC,
-   MsgHandler (..), MonadMsgHandler, newMsgHandler, runMsgHandler, stopMsgHandler)
+  ( Channel
+  , Nick
+  , MsgHandlerName
+  , User (..)
+  , Message (..)
+  , Command (..)
+  , BotConfig (..)
+  , BotStatus (..)
+  , Bot (..)
+  , IRC
+  , runIRC
+  , MsgHandler (..)
+  , MonadMsgHandler
+  , newMsgHandler
+  , runMsgHandler
+  , stopMsgHandler)
 where
 
 import ClassyPrelude
@@ -68,11 +81,11 @@ data BotConfig = BotConfig { server          :: !Text
                            , config          :: !Config }
 
 instance Show BotConfig where
-  show BotConfig { .. } = "server = " ++ show server ++ "\n" ++
-                          "port = " ++ show port ++ "\n" ++
-                          "channel = " ++ show channel ++ "\n" ++
-                          "nick = " ++ show botNick ++ "\n" ++
-                          "timeout = " ++ show botTimeout ++ "\n" ++
+  show BotConfig { .. } = "server = "   ++ show server          ++ "\n" ++
+                          "port = "     ++ show port            ++ "\n" ++
+                          "channel = "  ++ show channel         ++ "\n" ++
+                          "nick = "     ++ show botNick         ++ "\n" ++
+                          "timeout = "  ++ show botTimeout      ++ "\n" ++
                           "handlers = " ++ show msgHandlerNames
 
 data Bot = Bot { botConfig   :: !BotConfig
@@ -107,7 +120,7 @@ newtype MsgHandlerT a = MsgHandlerT { _runMsgHandler :: ReaderT BotConfig IO a }
                               , MonadIO
                               , MonadReader BotConfig )
 
-class ( MonadIO m, Applicative m, MonadReader BotConfig m ) => MonadMsgHandler m where
+class (MonadIO m, Applicative m, MonadReader BotConfig m) => MonadMsgHandler m where
   msgHandler :: MsgHandlerT a -> m a
 
 instance MonadMsgHandler MsgHandlerT where
