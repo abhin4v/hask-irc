@@ -11,6 +11,7 @@ import qualified Data.Text.Format as TF
 import qualified Data.Text.Format.Params as TF
 
 import ClassyPrelude hiding (try, (</>), (<.>), FilePath, log)
+import Control.Concurrent.Lifted
 import Control.Exception.Lifted
 import Control.Monad.Reader
 import Data.Time (diffDays)
@@ -22,13 +23,13 @@ import Network.IRC.Types
 
 type LoggerState = Maybe (Handle, Day)
 
-mkMsgHandler :: BotConfig -> MsgHandlerName -> IO (Maybe MsgHandler)
-mkMsgHandler botConfig "messagelogger" = do
+mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler botConfig _ "messagelogger" = do
   state <- liftIO $ newIORef Nothing
   initMessageLogger botConfig state
-  return . Just $ newMsgHandler { msgHandlerRun  = flip messageLogger state
-                                , msgHandlerStop = exitMessageLogger state }
-mkMsgHandler _  _                      = return Nothing
+  return . Just $ newMsgHandler { onMessage = flip messageLogger state
+                                , onStop    = exitMessageLogger state }
+mkMsgHandler _ _ _                       = return Nothing
 
 getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do

@@ -9,6 +9,7 @@ import qualified Network.IRC.Handlers.MessageLogger as L
 import qualified Network.IRC.Handlers.SongSearch as SS
 
 import ClassyPrelude
+import Control.Concurrent.Lifted
 import Control.Monad.Reader.Class
 import Data.Convertible
 import Data.Text (strip)
@@ -22,19 +23,18 @@ clean = toLower . strip
 coreMsgHandlerNames :: [Text]
 coreMsgHandlerNames = ["pingpong", "messagelogger"]
 
-mkMsgHandler :: BotConfig -> MsgHandlerName -> IO (Maybe MsgHandler)
-mkMsgHandler _ "greeter"    = return . Just $ newMsgHandler { msgHandlerRun = greeter }
-mkMsgHandler _ "welcomer"   = return . Just $ newMsgHandler { msgHandlerRun = welcomer }
-
-mkMsgHandler _ "pingpong"   = do
+mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler _ _ "greeter"  = return . Just $ newMsgHandler { onMessage = greeter }
+mkMsgHandler _ _ "welcomer" = return . Just $ newMsgHandler { onMessage = welcomer }
+mkMsgHandler _ _ "pingpong" = do
   state <- getCurrentTime >>= newIORef
-  return . Just $ newMsgHandler { msgHandlerRun = pingPong state }
+  return . Just $ newMsgHandler { onMessage = pingPong state }
 
-mkMsgHandler botConfig name =
+mkMsgHandler botConfig eventChan name =
   flip (`foldM` Nothing) [L.mkMsgHandler, SS.mkMsgHandler] $ \acc h ->
     case acc of
       Just _  -> return acc
-      Nothing -> h botConfig name
+      Nothing -> h botConfig eventChan name
 
 pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m (Maybe Command)
 pingPong state PingMsg { .. } = do

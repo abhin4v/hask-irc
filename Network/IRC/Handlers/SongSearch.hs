@@ -9,6 +9,7 @@ module Network.IRC.Handlers.SongSearch (mkMsgHandler) where
 import qualified Data.Configurator as CF
 
 import ClassyPrelude hiding (try)
+import Control.Concurrent.Lifted
 import Control.Exception.Lifted
 import Control.Monad.Reader
 import Data.Aeson
@@ -19,9 +20,9 @@ import Network.HTTP.Base
 
 import Network.IRC.Types
 
-mkMsgHandler :: BotConfig -> MsgHandlerName -> IO (Maybe MsgHandler)
-mkMsgHandler _ "songsearch" = return . Just $ newMsgHandler { msgHandlerRun = songSearch }
-mkMsgHandler _ _            = return Nothing
+mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler _ _ "songsearch" = return . Just $ newMsgHandler { onMessage = songSearch }
+mkMsgHandler _ _ _            = return Nothing
 
 data Song = NoSong | Song { url :: Text, name :: Text, artist :: Text }
             deriving (Show, Eq)

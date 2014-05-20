@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -14,6 +15,10 @@ module Network.IRC.Types
   , User (..)
   , Message (..)
   , Command (..)
+  , Event (..)
+  , SomeEvent
+  , QuitEvent(..)
+  , EventResponse (..)
   , BotConfig (..)
   , BotStatus (..)
   , Bot (..)
@@ -22,7 +27,8 @@ module Network.IRC.Types
   , MsgHandler (..)
   , MonadMsgHandler
   , newMsgHandler
-  , runMsgHandler
+  , handleMessage
+  , handleEvent
   , stopMsgHandler)
 where
 
@@ -30,6 +36,7 @@ import ClassyPrelude
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Configurator.Types
+import Data.Typeable (cast)
 
 type Channel        = Text
 type Nick           = Text
@@ -69,8 +76,31 @@ data Command =
   | JoinCmd
   | QuitCmd
   | NamesCmd
-  | MessageCmd Message
   deriving (Show, Eq)
+
+class (Typeable e, Show e) => Event e where
+  toEvent :: e -> IO SomeEvent
+  toEvent e = SomeEvent <$> pure e <*> getCurrentTime
+
+  fromEvent :: SomeEvent -> Maybe (e, UTCTime)
+  fromEvent (SomeEvent e time) = do
+    ev <- cast e
+    return (ev, time)
+
+data SomeEvent = forall e. Event e => SomeEvent e UTCTime deriving (Typeable)
+
+instance Show SomeEvent where
+  show (SomeEvent e time) = formatTime defaultTimeLocale "[%F %T] " time ++ show e
+
+data QuitEvent = QuitEvent deriving (Show, Typeable)
+
+instance Event QuitEvent
+
+data EventResponse =  RespNothing
+                    | RespEvent SomeEvent
+                    | RespMessage Message
+                    | RespCommand Command
+                    deriving (Show)
 
 data BotConfig = BotConfig { server          :: !Text
                            , port            :: !Int
@@ -126,16 +156,27 @@ class (MonadIO m, Applicative m, MonadReader BotConfig m) => MonadMsgHandler m w
 instance MonadMsgHandler MsgHandlerT where
   msgHandler = id
 
-runMsgHandler :: MsgHandler -> BotConfig -> Message -> IO (Maybe Command)
-runMsgHandler MsgHandler { .. } botConfig = flip runReaderT botConfig . _runMsgHandler . msgHandlerRun
+handleMessage :: MsgHandler -> BotConfig -> Message -> IO (Maybe Command)
+handleMessage MsgHandler { .. } botConfig =
+  flip runReaderT botConfig . _runMsgHandler . onMessage
 
 stopMsgHandler :: MsgHandler -> BotConfig -> IO ()
 stopMsgHandler MsgHandler { .. } botConfig =
-  flip runReaderT botConfig . _runMsgHandler $ msgHandlerStop
+  flip runReaderT botConfig . _runMsgHandler $ onStop
 
-data MsgHandler = MsgHandler { msgHandlerRun  :: !(forall m . MonadMsgHandler m => Message -> m (Maybe Command))
-                             , msgHandlerStop :: !(forall m . MonadMsgHandler m => m ()) }
+handleEvent :: MsgHandler -> BotConfig -> SomeEvent -> IO EventResponse
+handleEvent MsgHandler { .. } botConfig =
+  flip runReaderT botConfig . _runMsgHandler . onEvent
+
+data MsgHandler = MsgHandler {
+  onMessage :: !(forall m . MonadMsgHandler m => Message -> m (Maybe Command)),
+  onStop    :: !(forall m . MonadMsgHandler m => m ()),
+  onEvent   :: !(forall m . MonadMsgHandler m => SomeEvent -> m EventResponse)
+}
 
 newMsgHandler :: MsgHandler
-newMsgHandler = MsgHandler { msgHandlerRun  = const $ return Nothing
-                           , msgHandlerStop = return () }
+newMsgHandler = MsgHandler {
+  onMessage = const $ return Nothing,
+  onStop    = return (),
+  onEvent   = const $ return RespNothing
+}
