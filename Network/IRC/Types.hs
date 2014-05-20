@@ -9,8 +9,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Network.IRC.Types
-  ( Channel
-  , Nick
+  ( Nick
   , MsgHandlerName
   , User (..)
   , Message (..)
@@ -38,7 +37,6 @@ import Control.Monad.State
 import Data.Configurator.Types
 import Data.Typeable (cast)
 
-type Channel        = Text
 type Nick           = Text
 type MsgHandlerName = Text
 

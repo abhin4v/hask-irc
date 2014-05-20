@@ -38,11 +38,23 @@ latchIt latch = putMVar latch ()
 awaitLatch :: Latch -> IO ()
 awaitLatch latch = void $ takeMVar latch
 
-type EChannel a = (Chan a, Latch)
+type Channel a = (Chan a, Latch)
 
 data Line = Timeout | EOF | Line !Message deriving (Show, Eq)
 
-sendCommandLoop :: EChannel Command -> Bot -> IO ()
+sendCommand :: Chan Command -> Command -> IO ()
+sendCommand = writeChan
+
+sendMessage :: Chan Line -> Message -> IO ()
+sendMessage = (. Line) . writeChan
+
+sendEvent :: Chan SomeEvent -> SomeEvent -> IO ()
+sendEvent = writeChan
+
+readLine :: Chan Line -> IO Line
+readLine = readChan
+
+sendCommandLoop :: Channel Command -> Bot -> IO ()
 sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
   cmd       <- readChan commandChan
   time      <- getCurrentTime
@@ -56,10 +68,7 @@ sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
     QuitCmd -> latchIt latch
     _       -> sendCommandLoop (commandChan, latch) bot
 
-sendCommand :: Chan Command -> Command -> IO ()
-sendCommand = writeChan
-
-readLineLoop :: MVar BotStatus -> EChannel Line -> Bot -> Int -> IO ()
+readLineLoop :: MVar BotStatus -> Channel Line -> Bot -> Int -> IO ()
 readLineLoop mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
   botStatus <- readMVar mvBotStatus
   case botStatus of
@@ -80,12 +89,6 @@ readLineLoop mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
               debug $ "< " ++ line
               now <- getCurrentTime
               return . Line $ msgFromLine botConfig now line
-
-readLine :: Chan Line -> IO Line
-readLine = readChan
-
-sendMessage :: Chan Line -> Message -> IO ()
-sendMessage = (. Line) . writeChan
 
 listenerLoop :: Chan Line -> Chan Command -> Int -> IRC ()
 listenerLoop lineChan commandChan !idleFor = do
@@ -134,16 +137,13 @@ listenerLoop lineChan commandChan !idleFor = do
             Nothing  -> return ()
             Just cmd -> sendCommand commandChan cmd
 
-sendEvent :: Chan SomeEvent -> SomeEvent -> IO ()
-sendEvent = writeChan
-
-eventProcessLoop :: EChannel SomeEvent -> Chan Line -> Chan Command -> Bot -> IO ()
+eventProcessLoop :: Channel SomeEvent -> Chan Line -> Chan Command -> Bot -> IO ()
 eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
   event <- readChan eventChan
   case fromEvent event of
     Just (QuitEvent, _) -> latchIt latch
     _                   -> do
-      debug $ "** Event: " ++ pack (show event)
+      debug $ "Event: " ++ pack (show event)
       forM_ (mapToList msgHandlers) $ \(_, msgHandler) -> fork $
         handle (\(ex :: SomeException) ->
                   debug $ "Exception while processing event: " ++ pack (show ex)) $ do
@@ -155,22 +155,7 @@ eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
             _                   -> return ()
       eventProcessLoop (eventChan, latch) lineChan commandChan bot
 
-loadMsgHandlers :: BotConfig -> Chan SomeEvent -> IO (Map MsgHandlerName MsgHandler)
-loadMsgHandlers botConfig@BotConfig { .. } eventChan =
-  flip (`foldM` mempty) msgHandlerNames $ \hMap msgHandlerName -> do
-    debug $ "Loading msg handler: " ++ msgHandlerName
-    mMsgHandler <- mkMsgHandler botConfig eventChan msgHandlerName
-    case mMsgHandler of
-      Nothing         -> debug ("No msg handler found with name: " ++ msgHandlerName) >> return hMap
-      Just msgHandler -> return $ insertMap msgHandlerName msgHandler hMap
-
-unloadMsgHandlers :: Bot -> IO ()
-unloadMsgHandlers Bot { .. } =
-  forM_ (mapToList msgHandlers) $ \(msgHandlerName, msgHandler) -> do
-    debug $ "Unloading msg handler: " ++ msgHandlerName
-    stopMsgHandler msgHandler botConfig
-
-connect :: BotConfig -> IO (Bot, MVar BotStatus, EChannel Line, EChannel Command, EChannel SomeEvent)
+connect :: BotConfig -> IO (Bot, MVar BotStatus, Channel Line, Channel Command, Channel SomeEvent)
 connect botConfig@BotConfig { .. } = do
   debug "Connecting ..."
   socket <- connectToWithRetry
@@ -181,8 +166,7 @@ connect botConfig@BotConfig { .. } = do
   commandChan <- newChannel
   eventChan   <- newChannel
   mvBotStatus <- newMVar Connected
-
-  msgHandlers <- loadMsgHandlers botConfig (fst eventChan)
+  msgHandlers <- loadMsgHandlers (fst eventChan)
 
   return (Bot botConfig socket msgHandlers, mvBotStatus, lineChan, commandChan, eventChan)
   where
@@ -194,8 +178,15 @@ connect botConfig@BotConfig { .. } = do
 
     newChannel = (,) <$> newChan <*> newEmptyMVar
 
-disconnect :: (Bot, MVar BotStatus, EChannel Line, EChannel Command, EChannel SomeEvent) -> IO ()
-disconnect (bot@Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch), (eventChan, eventLatch)) = do
+    loadMsgHandlers eventChan = flip (`foldM` mempty) msgHandlerNames $ \hMap msgHandlerName -> do
+      debug $ "Loading msg handler: " ++ msgHandlerName
+      mMsgHandler <- mkMsgHandler botConfig eventChan msgHandlerName
+      case mMsgHandler of
+        Nothing         -> debug ("No msg handler found with name: " ++ msgHandlerName) >> return hMap
+        Just msgHandler -> return $ insertMap msgHandlerName msgHandler hMap
+
+disconnect :: (Bot, MVar BotStatus, Channel Line, Channel Command, Channel SomeEvent) -> IO ()
+disconnect (Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch), (eventChan, eventLatch)) = do
   debug "Disconnecting ..."
   sendCommand commandChan QuitCmd
   awaitLatch sendLatch
@@ -204,13 +195,13 @@ disconnect (bot@Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch
   sendEvent eventChan =<< toEvent QuitEvent
   awaitLatch eventLatch
 
-  unloadMsgHandlers bot
+  unloadMsgHandlers
   hClose socket
   debug "Disconnected"
-
-addCoreMsgHandlers :: BotConfig -> BotConfig
-addCoreMsgHandlers botConfig =
-  botConfig { msgHandlerNames = hashNub $ msgHandlerNames botConfig ++ coreMsgHandlerNames }
+  where
+    unloadMsgHandlers = forM_ (mapToList msgHandlers) $ \(msgHandlerName, msgHandler) -> do
+      debug $ "Unloading msg handler: " ++ msgHandlerName
+      stopMsgHandler msgHandler botConfig
 
 run :: BotConfig -> IO ()
 run botConfig' = withSocketsDo $ do
@@ -225,7 +216,7 @@ run botConfig' = withSocketsDo $ do
     NickNotAvailable -> return ()
     _                -> error "Unsupported status"
   where
-    botConfig = addCoreMsgHandlers botConfig'
+    botConfig = botConfig' { msgHandlerNames = hashNub $ msgHandlerNames botConfig' ++ coreMsgHandlerNames }
 
     handleErrors :: SomeException -> IO BotStatus
     handleErrors e = case fromException e of
