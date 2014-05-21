@@ -19,6 +19,7 @@ import Network.Curl.Aeson        (curlAesonGet, CurlAesonException)
 import Network.HTTP.Base         (urlEncode)
 
 import Network.IRC.Types
+import Network.IRC.Util
 
 mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
 mkMsgHandler _ _ "songsearch" = return . Just $ newMsgHandler { onMessage = songSearch }
@@ -40,7 +41,8 @@ songSearch ChannelMsg { .. }
         let query = strip . drop 3 $ msg
         mApiKey <- CF.lookup config "songsearch.tinysong_apikey"
         map (Just . ChannelMsgReply) $ case mApiKey of
-          Nothing     -> -- do log "tinysong api key not found in config"
+          Nothing     -> do
+            debug "tinysong api key not found in config"
             return $ "Error while searching for " ++ query
           Just apiKey -> do
             let apiUrl = "http://tinysong.com/b/" ++ urlEncode (unpack query)

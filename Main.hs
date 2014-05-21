@@ -9,7 +9,7 @@ import qualified Data.Configurator as CF
 import ClassyPrelude hiding (try, getArgs)
 import Control.Concurrent.Lifted (myThreadId)
 import Control.Exception.Lifted  (try, throwTo, AsyncException (UserInterrupt))
-import Data.Configurator.Types   (Configured (..), ConfigError (..), Value (List), KeyError (..))
+import Data.Configurator.Types   (Configured (..), Value (List), ConfigError (..), KeyError (..))
 import System.Environment        (getArgs, getProgName)
 import System.Exit               (exitFailure)
 import System.Posix.Signals      (installHandler, sigINT, sigTERM, Handler (Catch))
@@ -35,7 +35,7 @@ main = do
   installHandler sigTERM (Catch $ throwTo mainThreadId UserInterrupt) Nothing
 
   let configFile = headEx args
-  loadBotConfig configFile >>= run
+  loadBotConfig configFile >>= runBot
 
 loadBotConfig :: String -> IO BotConfig
 loadBotConfig configFile = do
