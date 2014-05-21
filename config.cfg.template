@@ -2,7 +2,7 @@ server = "irc.freenode.net"
 port = 6667
 channel = "#testtesttest"
 nick = "haskman"
-msghandlers = ["greeter", "welcomer", "songsearch"]
+msghandlers = ["greeter", "welcomer", "songsearch", "auth"]
 
 songsearch {
   tinysong_apikey = "xxxyyyzzz"

@@ -69,7 +69,11 @@ library
                        unix              >=2.7,
                        convertible       >=1.1,
                        hslogger          >=1.2.4,
-                       hslogger-template >=2.0
+                       hslogger-template >=2.0,
+                       ixset             >=1.0,
+                       acid-state        >=0.12,
+                       safecopy          >=0.8,
+                       uuid              >=1.3
 
   exposed-modules:     Network.IRC.Types, Network.IRC.Protocol,
                        Network.IRC.Handlers, Network.IRC.Client
@@ -108,7 +112,11 @@ executable hask-irc
                        unix              >=2.7,
                        convertible       >=1.1,
                        hslogger          >=1.2.4,
-                       hslogger-template >=2.0
+                       hslogger-template >=2.0,
+                       ixset             >=1.0,
+                       acid-state        >=0.12,
+                       safecopy          >=0.8,
+                       uuid              >=1.3
 
   -- Directories containing source files.
   -- hs-source-dirs:

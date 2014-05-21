@@ -60,6 +60,6 @@ lineFromCommand BotConfig { .. } command = case command of
   JoinCmd                         -> Just $ "JOIN " ++ channel
   QuitCmd                         -> Just "QUIT"
   ChannelMsgReply { .. }          -> Just $ "PRIVMSG " ++ channel ++ " :" ++ rmsg
-  PrivMsgReply (User { .. }) rmsg -> Just $ "PRIVMSG " ++ botNick ++ " :" ++ rmsg
+  PrivMsgReply (User { .. }) rmsg -> Just $ "PRIVMSG " ++ userNick ++ " :" ++ rmsg
   NamesCmd                        -> Just $ "NAMES " ++ channel
   _                               -> Nothing

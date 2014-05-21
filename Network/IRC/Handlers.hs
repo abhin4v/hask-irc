@@ -7,6 +7,7 @@ module Network.IRC.Handlers (coreMsgHandlerNames, mkMsgHandler) where
 
 import qualified Network.IRC.Handlers.MessageLogger as L
 import qualified Network.IRC.Handlers.SongSearch as SS
+import qualified Network.IRC.Handlers.Auth as A
 
 import ClassyPrelude
 import Control.Concurrent.Lifted  (Chan)
@@ -31,7 +32,7 @@ mkMsgHandler _ _ "pingpong" = do
   return . Just $ newMsgHandler { onMessage = pingPong state }
 
 mkMsgHandler botConfig eventChan name =
-  flip (`foldM` Nothing) [L.mkMsgHandler, SS.mkMsgHandler] $ \acc h ->
+  flip (`foldM` Nothing) [L.mkMsgHandler, SS.mkMsgHandler, A.mkMsgHandler] $ \acc h ->
     case acc of
       Just _  -> return acc
       Nothing -> h botConfig eventChan name
