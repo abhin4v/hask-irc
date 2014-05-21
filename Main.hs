@@ -6,12 +6,17 @@ module Main (main) where
 
 import qualified Data.Configurator as CF
 
-import ClassyPrelude hiding (try, getArgs)
+import ClassyPrelude hiding      (getArgs)
 import Control.Concurrent.Lifted (myThreadId)
-import Control.Exception.Lifted  (try, throwTo, AsyncException (UserInterrupt))
+import Control.Exception.Lifted  (throwTo, AsyncException (UserInterrupt))
 import Data.Configurator.Types   (Configured (..), Value (List), ConfigError (..), KeyError (..))
 import System.Environment        (getArgs, getProgName)
 import System.Exit               (exitFailure)
+import System.Log.Formatter      (tfLogFormatter)
+import System.Log.Handler        (setFormatter)
+import System.Log.Handler.Simple (streamHandler)
+import System.Log.Logger         (Priority (..), updateGlobalLogger, rootLoggerName,
+                                  setHandlers, setLevel)
 import System.Posix.Signals      (installHandler, sigINT, sigTERM, Handler (Catch))
 
 import Network.IRC.Types
@@ -23,6 +28,7 @@ instance Configured a => Configured [a] where
 
 main :: IO ()
 main = do
+  -- get args
   args <- getArgs
   prog <- getProgName
 
@@ -30,10 +36,17 @@ main = do
     putStrLn $ "Usage: " ++ pack prog ++ " <config file path>"
     exitFailure
 
+  -- setup signal handling
   mainThreadId <- myThreadId
   installHandler sigINT  (Catch $ throwTo mainThreadId UserInterrupt) Nothing
   installHandler sigTERM (Catch $ throwTo mainThreadId UserInterrupt) Nothing
 
+  -- setup logging
+  stderrHandler <- streamHandler stderr DEBUG >>= \lh -> return $
+                     setFormatter lh $ tfLogFormatter "%F %T" "[$utcTime] $loggername $prio $msg"
+  updateGlobalLogger rootLoggerName (setHandlers [stderrHandler] . setLevel DEBUG)
+
+  -- load config and start the bot
   let configFile = headEx args
   loadBotConfig configFile >>= runBot
 

@@ -28,7 +28,7 @@ module Network.IRC.Types
   , newMsgHandler
   , handleMessage
   , handleEvent
-  , stopMsgHandler)
+  , stopMsgHandler )
 where
 
 import ClassyPrelude

@@ -10,7 +10,7 @@ import qualified Data.Configurator as C
 import qualified Data.Text.Format as TF
 import qualified Data.Text.Format.Params as TF
 
-import ClassyPrelude hiding (try, (</>), (<.>), FilePath, log)
+import ClassyPrelude hiding      ((</>), (<.>), FilePath, log)
 import Control.Concurrent.Lifted (Chan)
 import Control.Exception.Lifted  (mask_)
 import Control.Monad.Reader      (ask)

@@ -3,23 +3,27 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Network.IRC.Handlers.SongSearch (mkMsgHandler) where
 
 import qualified Data.Configurator as CF
+import qualified System.Log.Logger as HSL
 
-import ClassyPrelude hiding      (try)
+import ClassyPrelude
 import Control.Concurrent.Lifted (Chan)
-import Control.Exception.Lifted  (try, evaluate)
+import Control.Exception.Lifted  (evaluate)
 import Control.Monad.Reader      (ask)
 import Data.Aeson                (FromJSON, parseJSON, Value (..), (.:))
 import Data.Aeson.Types          (emptyArray)
 import Data.Text                 (strip)
 import Network.Curl.Aeson        (curlAesonGet, CurlAesonException)
 import Network.HTTP.Base         (urlEncode)
+import System.Log.Logger.TH      (deriveLoggers)
 
 import Network.IRC.Types
-import Network.IRC.Util
+
+$(deriveLoggers "HSL" [HSL.ERROR])
 
 mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
 mkMsgHandler _ _ "songsearch" = return . Just $ newMsgHandler { onMessage = songSearch }
@@ -42,7 +46,7 @@ songSearch ChannelMsg { .. }
         mApiKey <- CF.lookup config "songsearch.tinysong_apikey"
         map (Just . ChannelMsgReply) $ case mApiKey of
           Nothing     -> do
-            debug "tinysong api key not found in config"
+            errorM "tinysong api key not found in config"
             return $ "Error while searching for " ++ query
           Just apiKey -> do
             let apiUrl = "http://tinysong.com/b/" ++ urlEncode (unpack query)

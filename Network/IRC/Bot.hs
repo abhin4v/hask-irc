@@ -3,11 +3,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 
-module Network.IRC.Bot where
+module Network.IRC.Bot
+  ( Line (..)
+  , sendCommand
+  , sendMessage
+  , sendEvent
+  , readLine
+  , sendCommandLoop
+  , readLineLoop
+  , messageProcessLoop
+  , eventProcessLoop )
+where
 
 import qualified Data.Text.Format as TF
-import qualified Data.Text.Format.Params as TF
+import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
 import Control.Concurrent.Lifted (fork, Chan, readChan, writeChan, threadDelay)
@@ -16,10 +27,13 @@ import Control.Monad.Reader      (ask)
 import Control.Monad.State       (get, put)
 import System.IO                 (hIsEOF)
 import System.Timeout            (timeout)
+import System.Log.Logger.TH      (deriveLoggers)
 
 import Network.IRC.Protocol
 import Network.IRC.Types
 import Network.IRC.Util
+
+$(deriveLoggers "HSL" [HSL.DEBUG, HSL.INFO, HSL.ERROR])
 
 data Line = Timeout | EOF | Line !Message deriving (Show, Eq)
 
@@ -38,16 +52,17 @@ readLine = readChan
 sendCommandLoop :: Channel Command -> Bot -> IO ()
 sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
   cmd       <- readChan commandChan
-  time      <- getCurrentTime
   let mline = lineFromCommand botConfig cmd
-  case mline of
-    Nothing   -> return ()
-    Just line -> do
-      TF.hprint socket "{}\r\n" $ TF.Only line
-      TF.print "[{}] > {}\n" $ TF.buildParams (formatTime defaultTimeLocale "%F %T" time, line)
-  case cmd of
-    QuitCmd -> latchIt latch
-    _       -> sendCommandLoop (commandChan, latch) bot
+  handle (\(e :: SomeException) ->
+            errorM ("Error while writing to connection: " ++ show e) >> latchIt latch) $ do
+    case mline of
+      Nothing   -> return ()
+      Just line -> do
+        TF.hprint socket "{}\r\n" $ TF.Only line
+        infoM . unpack $ "> " ++ line
+    case cmd of
+      QuitCmd -> latchIt latch
+      _       -> sendCommandLoop (commandChan, latch) bot
 
 readLineLoop :: MVar BotStatus -> Channel Line -> Bot -> Int -> IO ()
 readLineLoop mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
@@ -55,10 +70,13 @@ readLineLoop mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
   case botStatus of
     Disconnected -> latchIt latch
     _            -> do
-      mLine <- timeout timeoutDelay readLine'
+      mLine <- try $ timeout timeoutDelay readLine'
       case mLine of
-        Nothing   -> writeChan lineChan Timeout
-        Just line -> writeChan lineChan line
+        Left (e :: SomeException) -> do
+          errorM $ "Error while reading from connection: " ++ show e
+          writeChan lineChan EOF
+        Right Nothing     -> writeChan lineChan Timeout
+        Right (Just line) -> writeChan lineChan line
       readLineLoop mvBotStatus (lineChan, latch) bot timeoutDelay
       where
         readLine' = do
@@ -67,7 +85,7 @@ readLineLoop mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
             then return EOF
             else do
               line <- map initEx $ hGetLine socket
-              debug $ "< " ++ line
+              infoM . unpack $ "< " ++ line
               now <- getCurrentTime
               return . Line $ msgFromLine botConfig now line
 
@@ -79,7 +97,7 @@ messageProcessLoop lineChan commandChan !idleFor = do
 
   nStatus <- liftIO . mask_ $
     if idleFor >= (oneSec * botTimeout botConfig)
-      then debug "Timeout" >> return Disconnected
+      then infoM "Timeout" >> return Disconnected
       else do
         when (status == Kicked) $
           threadDelay (5 * oneSec) >> sendCommand commandChan JoinCmd
@@ -87,13 +105,13 @@ messageProcessLoop lineChan commandChan !idleFor = do
         mLine <- readLine lineChan
         case mLine of
           Timeout      -> getCurrentTime >>= dispatchHandlers bot . IdleMsg  >> return Idle
-          EOF          -> debug "Connection closed" >> return Disconnected
+          EOF          -> infoM "Connection closed" >> return Disconnected
           Line message -> do
             nStatus <- case message of
-              JoinMsg { .. } | userNick user == nick -> debug "Joined" >> return Joined
-              KickMsg { .. } | kickedNick == nick    -> debug "Kicked" >> return Kicked
+              JoinMsg { .. } | userNick user == nick -> infoM "Joined" >> return Joined
+              KickMsg { .. } | kickedNick == nick    -> infoM "Kicked" >> return Kicked
               NickInUseMsg { .. }                    ->
-                debug "Nick already in use"     >> return NickNotAvailable
+                infoM "Nick already in use"     >> return NickNotAvailable
               ModeMsg { user = Self, .. }            ->
                 sendCommand commandChan JoinCmd >> return Connected
               _                                      -> return Connected
@@ -112,7 +130,7 @@ messageProcessLoop lineChan commandChan !idleFor = do
     dispatchHandlers Bot { .. } message =
       forM_ (mapToList msgHandlers) $ \(_, msgHandler) -> fork $
         handle (\(e :: SomeException) ->
-                  debug $ "Exception while processing message: " ++ pack (show e)) $ do
+                  errorM $ "Exception while processing message: " ++ show e) $ do
           mCmd <- handleMessage msgHandler botConfig message
           case mCmd of
             Nothing  -> return ()
@@ -124,10 +142,10 @@ eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
   case fromEvent event of
     Just (QuitEvent, _) -> latchIt latch
     _                   -> do
-      debug $ "Event: " ++ pack (show event)
+      debugM $ "Event: " ++ show event
       forM_ (mapToList msgHandlers) $ \(_, msgHandler) -> fork $
         handle (\(ex :: SomeException) ->
-                  debug $ "Exception while processing event: " ++ pack (show ex)) $ do
+                  errorM $ "Exception while processing event: " ++ show ex) $ do
           resp <- handleEvent msgHandler botConfig event
           case resp of
             RespMessage message -> sendMessage lineChan message
