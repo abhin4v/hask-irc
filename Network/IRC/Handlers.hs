@@ -9,11 +9,11 @@ import qualified Network.IRC.Handlers.MessageLogger as L
 import qualified Network.IRC.Handlers.SongSearch as SS
 
 import ClassyPrelude
-import Control.Concurrent.Lifted
-import Control.Monad.Reader.Class
-import Data.Convertible
-import Data.Text (strip)
-import Data.Time (addUTCTime)
+import Control.Concurrent.Lifted  (Chan)
+import Control.Monad.Reader       (ask)
+import Data.Convertible           (convert)
+import Data.Text                  (strip)
+import Data.Time                  (addUTCTime)
 
 import Network.IRC.Types
 

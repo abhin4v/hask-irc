@@ -8,15 +8,15 @@ module Network.IRC.Handlers.SongSearch (mkMsgHandler) where
 
 import qualified Data.Configurator as CF
 
-import ClassyPrelude hiding (try)
-import Control.Concurrent.Lifted
-import Control.Exception.Lifted
-import Control.Monad.Reader
-import Data.Aeson
-import Data.Aeson.Types (emptyArray)
-import Data.Text (strip)
-import Network.Curl.Aeson
-import Network.HTTP.Base
+import ClassyPrelude hiding      (try)
+import Control.Concurrent.Lifted (Chan)
+import Control.Exception.Lifted  (try, evaluate)
+import Control.Monad.Reader      (ask)
+import Data.Aeson                (FromJSON, parseJSON, Value (..), (.:))
+import Data.Aeson.Types          (emptyArray)
+import Data.Text                 (strip)
+import Network.Curl.Aeson        (curlAesonGet, CurlAesonException)
+import Network.HTTP.Base         (urlEncode)
 
 import Network.IRC.Types
 

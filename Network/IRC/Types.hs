@@ -32,10 +32,12 @@ module Network.IRC.Types
 where
 
 import ClassyPrelude
-import Control.Monad.Reader
-import Control.Monad.State
-import Data.Configurator.Types
-import Data.Typeable (cast)
+import Control.Monad.Reader    (ReaderT, MonadReader, runReaderT)
+import Control.Monad.State     (StateT, MonadState, execStateT)
+import Data.Configurator.Types (Config)
+import Data.Typeable           (cast)
+
+-- IRC related
 
 type Nick           = Text
 type MsgHandlerName = Text
@@ -76,6 +78,8 @@ data Command =
   | NamesCmd
   deriving (Show, Eq)
 
+-- Internal events
+
 class (Typeable e, Show e) => Event e where
   toEvent :: e -> IO SomeEvent
   toEvent e = SomeEvent <$> pure e <*> getCurrentTime
@@ -86,12 +90,10 @@ class (Typeable e, Show e) => Event e where
     return (ev, time)
 
 data SomeEvent = forall e. Event e => SomeEvent e UTCTime deriving (Typeable)
-
 instance Show SomeEvent where
   show (SomeEvent e time) = formatTime defaultTimeLocale "[%F %T] " time ++ show e
 
 data QuitEvent = QuitEvent deriving (Show, Typeable)
-
 instance Event QuitEvent
 
 data EventResponse =  RespNothing
@@ -99,6 +101,8 @@ data EventResponse =  RespNothing
                     | RespMessage Message
                     | RespCommand Command
                     deriving (Show)
+
+-- Bot
 
 data BotConfig = BotConfig { server          :: !Text
                            , port            :: !Int
@@ -140,6 +144,8 @@ newtype IRC a = IRC { _runIRC :: StateT BotStatus (ReaderT Bot IO) a }
 
 runIRC :: Bot -> BotStatus -> IRC a -> IO BotStatus
 runIRC bot botStatus = flip runReaderT bot . flip execStateT botStatus . _runIRC
+
+-- Message handlers
 
 newtype MsgHandlerT a = MsgHandlerT { _runMsgHandler :: ReaderT BotConfig IO a }
                      deriving ( Functor

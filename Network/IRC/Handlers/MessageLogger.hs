@@ -11,13 +11,13 @@ import qualified Data.Text.Format as TF
 import qualified Data.Text.Format.Params as TF
 
 import ClassyPrelude hiding (try, (</>), (<.>), FilePath, log)
-import Control.Concurrent.Lifted
-import Control.Exception.Lifted
-import Control.Monad.Reader
-import Data.Time (diffDays)
-import System.Directory
-import System.FilePath
-import System.IO (openFile, IOMode(..), hSetBuffering, BufferMode(..))
+import Control.Concurrent.Lifted (Chan)
+import Control.Exception.Lifted  (mask_)
+import Control.Monad.Reader      (ask)
+import Data.Time                 (diffDays)
+import System.Directory          (createDirectoryIfMissing, getModificationTime, copyFile, removeFile)
+import System.FilePath           (FilePath, (</>), (<.>))
+import System.IO                 (openFile, IOMode(..), hSetBuffering, BufferMode(..))
 
 import Network.IRC.Types
 

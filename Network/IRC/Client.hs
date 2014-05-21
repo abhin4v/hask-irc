@@ -10,13 +10,13 @@ import qualified Data.Text.Format as TF
 import qualified Data.Text.Format.Params as TF
 
 import ClassyPrelude
-import Control.Exception.Lifted
-import Control.Concurrent.Lifted
-import Control.Monad.Reader hiding (forM_, foldM)
-import Control.Monad.State hiding (forM_, foldM)
-import Network
-import System.IO (hIsEOF, hSetBuffering, BufferMode(..))
-import System.Timeout
+import Control.Exception.Lifted  (mask_, AsyncException (UserInterrupt))
+import Control.Concurrent.Lifted (fork, Chan, newChan, readChan, writeChan, threadDelay)
+import Control.Monad.Reader      (ask)
+import Control.Monad.State       (get, put)
+import Network                   (PortID (PortNumber), connectTo, withSocketsDo)
+import System.IO                 (hIsEOF, hSetBuffering, BufferMode(..))
+import System.Timeout            (timeout)
 
 import Network.IRC.Handlers
 import Network.IRC.Protocol
