@@ -62,7 +62,7 @@ pingPong _ _          = return Nothing
 
 greeter ::  MonadMsgHandler m => Message -> m (Maybe Command)
 greeter ChannelMsg { .. } =
-  return . map (ChannelMsgReply . (++ " ") . (++ userNick user)) . find (== clean msg) $ greetings
+  return . map (ChannelMsgReply . (++ userNick user) . (++ " ")) . find (== clean msg) $ greetings
   where
     greetings = [ "hi", "hello", "hey", "sup", "bye"
                 , "good morning", "good evening", "good night" ]
@@ -85,7 +85,7 @@ help ChannelMsg { .. }
       return . Just . ChannelMsgReply $ "I know these commands: " ++ unwords commands
   | "!help" `isPrefixOf` msg = do
       BotConfig { .. } <- ask
-      let command = clean . unwords . drop 1 . words $ msg
+      let command = cons '!'. dropWhile (== '!') . clean . unwords . drop 1 . words $ msg
       let mHelp   = find ((== command) . fst) . concatMap mapToList . mapValues $ msgHandlerInfo
       return . Just . ChannelMsgReply $ maybe ("No such command found: " ++ command) snd mHelp
 

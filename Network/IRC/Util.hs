@@ -4,9 +4,6 @@
 
 module Network.IRC.Util where
 
---import qualified Data.Text.Format as TF
---import qualified Data.Text.Format.Params as TF
-
 import ClassyPrelude
 import Control.Concurrent.Lifted (Chan)
 import Data.Text                 (strip)

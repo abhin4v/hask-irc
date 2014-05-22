@@ -14,7 +14,7 @@ newtype CanonicalNick = CanonicalNick Text deriving (Eq, Ord, Show, Data, Typeab
 newtype LastSeenOn = LastSeenOn UTCTime deriving (Eq, Ord, Show, Data, Typeable)
 
 data NickTrack = NickTrack {
-  nick :: Nick,
+  nick          :: Nick,
   canonicalNick :: CanonicalNick,
   lastSeenOn    :: LastSeenOn,
   lastMessageOn :: UTCTime,
