@@ -58,7 +58,8 @@ pingPong state IdleMsg { .. } | even (convert msgTime :: Int) = do
     if addUTCTime limit lastComm < msgTime
       then return . Just . PingCmd . pack . formatTime defaultTimeLocale "%s" $ msgTime
       else return Nothing
-pingPong _ _          = return Nothing
+
+pingPong _ _ = return Nothing
 
 greeter ::  MonadMsgHandler m => Message -> m (Maybe Command)
 greeter ChannelMsg { .. } =

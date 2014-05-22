@@ -35,9 +35,6 @@ getByCanonicalNick canonicalNick = do
   NickTracking { .. } <- ask
   return . IS.toList $ nickTracking @= canonicalNick
 
---getLastSeenOn :: CanonicalNick -> Query NickTracking LastSeenOn
---getLastSeenOn = liftM (minimumEx . map lastSeenOn) . getByCanonicalNick
-
 saveNickTrack :: NickTrack -> Update NickTracking ()
 saveNickTrack nt = do
   NickTracking { .. } <- get
@@ -48,18 +45,18 @@ $(makeAcidic ''NickTracking ['getByNick, 'getByCanonicalNick, 'saveNickTrack])
 nickTrackerMsg :: MonadMsgHandler m => IORef (AcidState NickTracking) -> Message ->  m (Maybe Command)
 nickTrackerMsg state = go
   where
-    go ChannelMsg { .. } = updateNickTrack user msg msgTime >> handleCommands msg
-    go ActionMsg { .. }  = updateNickTrack user msg msgTime >> return Nothing
-    go JoinMsg { .. }    = updateNickTrack user "" msgTime  >> return Nothing
-    go PartMsg { .. }    = updateNickTrack user msg msgTime >> return Nothing
-    go QuitMsg { .. }    = updateNickTrack user msg msgTime >> return Nothing
-    go NickMsg { .. }    = handleNickChange user newNick msgTime  >> return Nothing
+    go ChannelMsg { .. } = updateNickTrack user msg msgTime      >> handleCommands msg
+    go ActionMsg { .. }  = updateNickTrack user msg msgTime      >> return Nothing
+    go JoinMsg { .. }    = updateNickTrack user "" msgTime       >> return Nothing
+    go PartMsg { .. }    = updateNickTrack user msg msgTime      >> return Nothing
+    go QuitMsg { .. }    = updateNickTrack user msg msgTime      >> return Nothing
+    go NickMsg { .. }    = handleNickChange user newNick msgTime >> return Nothing
     go _                 = return Nothing
 
     updateNickTrack user message msgTime = liftIO $ do
-      acid <- readIORef state
+      acid    <- readIORef state
       let nck = userNick user
-      mnt <- query acid . GetByNick $ Nick nck
+      mnt     <- query acid . GetByNick $ Nick nck
       (message', lastMessageOn', cn) <- case (message, mnt) of
         ("", Just (NickTrack { .. })) -> return (lastMessage, lastMessageOn, canonicalNick)
         (_, Just (NickTrack { .. }))  -> return (message, msgTime, canonicalNick)
@@ -71,11 +68,11 @@ nickTrackerMsg state = go
         NickTrack (Nick nck) cn (LastSeenOn msgTime) lastMessageOn' message'
 
     handleNickChange user newNick msgTime = liftIO $ do
-      acid <- readIORef state
+      acid         <- readIORef state
       let prevNick = userNick user
-      mpnt <- query acid . GetByNick $ Nick prevNick
-      mnt  <- query acid . GetByNick $ Nick newNick
-      mInfo <- case (mpnt, mnt) of
+      mpnt         <- query acid . GetByNick $ Nick prevNick
+      mnt          <- query acid . GetByNick $ Nick newNick
+      mInfo        <- case (mpnt, mnt) of
         (Nothing, _)       -> do
           cn <- map (CanonicalNick . pack . U.toString) U.nextRandom
           return $ Just ("", cn, msgTime)
@@ -87,38 +84,37 @@ nickTrackerMsg state = go
 
     commands = [ ("!nick", handleNickCommand)
                , ("!seen", handleSeenCommand) ]
+
     handleCommands message = case find ((`isPrefixOf` message) . fst) commands of
-      Nothing -> return Nothing
+      Nothing           -> return Nothing
       Just (_, handler) -> handler state message
 
-withCanonicalNick :: MonadMsgHandler m => IORef (AcidState NickTracking)
-                  -> Text
-                  -> (AcidState NickTracking -> Text -> CanonicalNick -> IO Text)
-                  -> m (Maybe Command)
-withCanonicalNick state msg f = liftIO $ do
+withNickTracks :: MonadMsgHandler m
+               => IORef (AcidState NickTracking) -> Text -> (Text -> [NickTrack] -> IO Text)
+               -> m (Maybe Command)
+withNickTracks state msg f = liftIO $ do
   acid <- readIORef state
-  let nck = clean . unwords . drop 1 . words $ msg
-  mcn <- liftM (map canonicalNick) . query acid . GetByNick $ Nick nck
+  let nick = clean . unwords . drop 1 . words $ msg
+  mcn <- liftM (map canonicalNick) . query acid . GetByNick $ Nick nick
   resp <- case mcn of
-    Nothing -> return $ "Unknown nick: " ++ nck
-    Just cn -> liftIO $ f acid nck cn
+    Nothing -> return $ "Unknown nick: " ++ nick
+    Just cn -> liftIO $ query acid (GetByCanonicalNick cn) >>= f nick
   return . Just . ChannelMsgReply $ resp
 
 handleNickCommand :: MonadMsgHandler m => IORef(AcidState NickTracking) -> Text -> m (Maybe Command)
-handleNickCommand state msg = withCanonicalNick state msg $ \acid nck canonicalNick -> do
-  nicks <- liftM (map ((\(Nick n) -> n) . nick)) . query acid . GetByCanonicalNick $ canonicalNick
+handleNickCommand state msg = withNickTracks state msg $ \nck nickTracks -> do
+  let nicks = map ((\(Nick n) -> n) . nick) nickTracks
   if length nicks == 1
     then return $ nck ++ " has only one nick"
     else return $ nck ++ "'s other nicks are: " ++ intercalate ", " (filter (/= nck) nicks)
 
 handleSeenCommand :: MonadMsgHandler m => IORef(AcidState NickTracking) -> Text -> m (Maybe Command)
-handleSeenCommand state msg = withCanonicalNick state msg $ \acid nick canonicalNick -> do
-  nts <- query acid . GetByCanonicalNick $ canonicalNick
+handleSeenCommand state msg = withNickTracks state msg $ \nick nickTracks -> do
   let NickTrack { lastSeenOn = LastSeenOn lastSeenOn'
-                , nick = Nick lastSeenAs } = maximumByEx (comparing lastSeenOn) nts
+                , nick       = Nick lastSeenAs } = maximumByEx (comparing lastSeenOn) nickTracks
   let NickTrack { lastMessageOn = lastMessageOn'
-                , lastMessage = lastMessage'
-                , nick = Nick lastMessageAs } = maximumByEx (comparing lastMessageOn) nts
+                , lastMessage   = lastMessage'
+                , nick          = Nick lastMessageAs } = maximumByEx (comparing lastMessageOn) nickTracks
 
   return $ nick ++ " was last seen on " ++ fmtTime lastSeenOn' ++
     (if nick /= lastSeenAs then " as " ++ lastSeenAs else "") ++
@@ -144,4 +140,4 @@ mkMsgHandler BotConfig { .. } _ "nicktracker" = do
     helpMsgs = mapFromList [
       ("!nick", "Shows the user's other nicks. !nick <user nick>"),
       ("!seen", "Lets you know when a user was last seen online and last spoke in the channel. !seen <user nick>") ]
-mkMsgHandler _ _ _                     = return Nothing
+mkMsgHandler _ _ _                            = return Nothing
