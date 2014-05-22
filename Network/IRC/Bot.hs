@@ -55,11 +55,9 @@ sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
   let mline = lineFromCommand botConfig cmd
   handle (\(e :: SomeException) ->
             errorM ("Error while writing to connection: " ++ show e) >> latchIt latch) $ do
-    case mline of
-      Nothing   -> return ()
-      Just line -> do
-        TF.hprint socket "{}\r\n" $ TF.Only line
-        infoM . unpack $ "> " ++ line
+    whenJust mline $ \line -> do
+      TF.hprint socket "{}\r\n" $ TF.Only line
+      infoM . unpack $ "> " ++ line
     case cmd of
       QuitCmd -> latchIt latch
       _       -> sendCommandLoop (commandChan, latch) bot
@@ -132,7 +130,7 @@ messageProcessLoop lineChan commandChan !idleFor = do
         handle (\(e :: SomeException) ->
                   errorM $ "Exception while processing message: " ++ show e) $ do
           mCmd <- handleMessage msgHandler botConfig message
-          maybe (return ()) (sendCommand commandChan) mCmd
+          whenJust mCmd (sendCommand commandChan)
 
 eventProcessLoop :: Channel SomeEvent -> Chan Line -> Chan Command -> Bot -> IO ()
 eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do

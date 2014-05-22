@@ -6,7 +6,7 @@ module Network.IRC.Protocol (msgFromLine, lineFromCommand) where
 
 import ClassyPrelude
 import Data.List ((!!))
-import Data.Text (split)
+import Data.Text (split, strip)
 
 import Network.IRC.Types
 
@@ -36,8 +36,8 @@ msgFromLine (BotConfig { .. }) time line
     source          = drop 1 . takeWhile isNotSpc $ line
     target          = splits !! 2
     command         = splits !! 1
-    message         = drop 1 . unwords . drop 3 $ splits
-    quitMessage     = drop 1 . unwords . drop 2 $ splits
+    message         = strip . drop 1 . unwords . drop 3 $ splits
+    quitMessage     = strip . drop 1 . unwords . drop 2 $ splits
     user            = uncurry User . break (== '!') $ source
     mode            = splits !! 3
     modeArgs        = drop 4 splits

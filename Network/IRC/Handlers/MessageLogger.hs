@@ -20,6 +20,7 @@ import System.FilePath           (FilePath, (</>), (<.>))
 import System.IO                 (openFile, IOMode(..), hSetBuffering, BufferMode(..))
 
 import Network.IRC.Types
+import Network.IRC.Util
 
 type LoggerState = Maybe (Handle, Day)
 
@@ -51,7 +52,7 @@ initMessageLogger botConfig state = do
   atomicWriteIORef state $ Just (logFileHandle, utctDay time)
 
 exitMessageLogger :: MonadMsgHandler m => IORef LoggerState -> m ()
-exitMessageLogger state = liftIO $ readIORef state >>= maybe (return ()) (hClose . fst)
+exitMessageLogger state = liftIO $ readIORef state >>= flip whenJust (hClose . fst)
 
 withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> IORef LoggerState -> m (Maybe Command)
 withLogFile action state = do
@@ -83,7 +84,7 @@ messageLogger message = case message of
   JoinMsg { .. }    -> log "** {} JOINED"             [userNick user]
   PartMsg { .. }    -> log "** {} PARTED :{}"         [userNick user, msg]
   QuitMsg { .. }    -> log "** {} QUIT :{}"           [userNick user, msg]
-  NickMsg { .. }    -> log "** {} CHANGED NICK TO {}" [userNick user, nick]
+  NickMsg { .. }    -> log "** {} CHANGED NICK TO {}" [userNick user, newNick]
   NamesMsg { .. }   -> log "** USERS {}"              [unwords nicks]
   _                 -> const $ return Nothing
   where

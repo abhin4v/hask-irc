@@ -8,19 +8,16 @@ module Network.IRC.Handlers (coreMsgHandlerNames, mkMsgHandler) where
 import qualified Network.IRC.Handlers.MessageLogger as Logger
 import qualified Network.IRC.Handlers.SongSearch    as SongSearch
 import qualified Network.IRC.Handlers.Auth          as Auth
+import qualified Network.IRC.Handlers.NickTracker   as NickTracker
 
 import ClassyPrelude
 import Control.Concurrent.Lifted  (Chan)
 import Control.Monad.Reader       (ask)
 import Data.Convertible           (convert)
-import Data.Text                  (strip)
 import Data.Time                  (addUTCTime)
 
 import Network.IRC.Types
 import Network.IRC.Util
-
-clean :: Text -> Text
-clean = toLower . strip
 
 coreMsgHandlerNames :: [Text]
 coreMsgHandlerNames = ["pingpong", "messagelogger", "help"]
@@ -32,15 +29,19 @@ mkMsgHandler _ _ "pingpong" = do
   state <- getCurrentTime >>= newIORef
   return . Just $ newMsgHandler { onMessage = pingPong state }
 mkMsgHandler _ _ "help"     =
-    return . Just $ newMsgHandler { onMessage = help, onHelp = return $ singletonMap "!help" helpMsg}
+    return . Just $ newMsgHandler { onMessage = help,
+                                    onHelp    = return $ singletonMap "!help" helpMsg }
   where
     helpMsg = "Get help. !help or !help <command>"
 
 mkMsgHandler botConfig eventChan name =
-  flip (`foldM` Nothing) [Logger.mkMsgHandler, SongSearch.mkMsgHandler, Auth.mkMsgHandler] $ \acc h ->
-    case acc of
-      Just _  -> return acc
-      Nothing -> h botConfig eventChan name
+  flip (`foldM` Nothing) [ Logger.mkMsgHandler
+                         , SongSearch.mkMsgHandler
+                         , Auth.mkMsgHandler
+                         , NickTracker.mkMsgHandler ]
+    $ \acc h -> case acc of
+                  Just _  -> return acc
+                  Nothing -> h botConfig eventChan name
 
 pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m (Maybe Command)
 pingPong state PingMsg { .. } = do
@@ -60,13 +61,11 @@ pingPong state IdleMsg { .. } | even (convert msgTime :: Int) = do
 pingPong _ _          = return Nothing
 
 greeter ::  MonadMsgHandler m => Message -> m (Maybe Command)
-greeter ChannelMsg { .. } = case find (== clean msg) greetings of
-    Nothing       -> return Nothing
-    Just greeting -> return . Just . ChannelMsgReply $ greeting ++ " " ++ userNick user
+greeter ChannelMsg { .. } =
+  return . map (ChannelMsgReply . (++ " ") . (++ userNick user)) . find (== clean msg) $ greetings
   where
-    greetings = ["hi", "hello", "hey", "sup", "bye"
-                , "good morning", "good evening", "good night"
-                , "ohayo", "oyasumi"]
+    greetings = [ "hi", "hello", "hey", "sup", "bye"
+                , "good morning", "good evening", "good night" ]
 greeter _ = return Nothing
 
 welcomer :: MonadMsgHandler m => Message -> m (Maybe Command)
@@ -91,4 +90,3 @@ help ChannelMsg { .. }
       return . Just . ChannelMsgReply $ maybe ("No such command found: " ++ command) snd mHelp
 
 help _ = return Nothing
-

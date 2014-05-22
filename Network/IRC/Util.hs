@@ -9,6 +9,7 @@ module Network.IRC.Util where
 
 import ClassyPrelude
 import Control.Concurrent.Lifted (Chan)
+import Data.Text                 (strip)
 
 oneSec :: Int
 oneSec = 1000000
@@ -28,3 +29,9 @@ mapKeys   = map fst . mapToList
 
 mapValues :: IsMap map => map -> [MapValue map]
 mapValues = map snd . mapToList
+
+whenJust :: Monad m => Maybe t -> (t -> m ()) -> m ()
+whenJust m f = maybe (return ()) f m
+
+clean :: Text -> Text
+clean = toLower . strip

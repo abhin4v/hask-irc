@@ -18,14 +18,11 @@ import Control.Monad.State       (get, put)
 import Data.Acid                 (AcidState, Query, Update, makeAcidic, query, update,
                                   openLocalState, createArchive)
 import Data.Acid.Local           (createCheckpointAndClose)
-import Data.SafeCopy             (base, deriveSafeCopy)
 
 import Network.IRC.Handlers.Auth.Types
 import Network.IRC.Types
 
 -- database
-
-$(deriveSafeCopy 0 'base ''Auth)
 
 getToken :: Nick -> Query Auth (Maybe Token)
 getToken user = lookup user <$> asks auth

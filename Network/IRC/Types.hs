@@ -58,7 +58,7 @@ data Message =
   | JoinMsg      { msgTime  :: !UTCTime, user    :: !User, msgLine     :: !Text }
   | QuitMsg      { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
   | PartMsg      { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
-  | NickMsg      { msgTime  :: !UTCTime, user    :: !User, nick        :: !Nick, msgLine :: !Text }
+  | NickMsg      { msgTime  :: !UTCTime, user    :: !User, newNick     :: !Nick, msgLine :: !Text }
   | NickInUseMsg { msgTime  :: !UTCTime, msgLine :: !Text }
   | KickMsg      { msgTime  :: !UTCTime, user    :: !User, kickedNick  :: !Nick, msg     :: !Text
                  , msgLine  :: !Text }
