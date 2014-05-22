@@ -51,11 +51,7 @@ initMessageLogger botConfig state = do
   atomicWriteIORef state $ Just (logFileHandle, utctDay time)
 
 exitMessageLogger :: MonadMsgHandler m => IORef LoggerState -> m ()
-exitMessageLogger state = liftIO $ do
-  mHandle <- readIORef state
-  case mHandle of
-    Nothing                 -> return ()
-    Just (logFileHandle, _) -> hClose logFileHandle
+exitMessageLogger state = liftIO $ readIORef state >>= maybe (return ()) (hClose . fst)
 
 withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> IORef LoggerState -> m (Maybe Command)
 withLogFile action state = do

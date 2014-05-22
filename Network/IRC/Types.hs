@@ -28,7 +28,8 @@ module Network.IRC.Types
   , newMsgHandler
   , handleMessage
   , handleEvent
-  , stopMsgHandler )
+  , stopMsgHandler
+  , getHelp )
 where
 
 import ClassyPrelude
@@ -36,6 +37,8 @@ import Control.Monad.Reader    (ReaderT, MonadReader, runReaderT)
 import Control.Monad.State     (StateT, MonadState, execStateT)
 import Data.Configurator.Types (Config)
 import Data.Typeable           (cast)
+
+import Network.IRC.Util
 
 -- IRC related
 
@@ -104,13 +107,13 @@ data EventResponse =  RespNothing
 
 -- Bot
 
-data BotConfig = BotConfig { server          :: !Text
-                           , port            :: !Int
-                           , channel         :: !Text
-                           , botNick         :: !Text
-                           , botTimeout      :: !Int
-                           , msgHandlerNames :: ![MsgHandlerName]
-                           , config          :: !Config }
+data BotConfig = BotConfig { server         :: !Text
+                           , port           :: !Int
+                           , channel        :: !Text
+                           , botNick        :: !Text
+                           , botTimeout     :: !Int
+                           , msgHandlerInfo :: !(Map MsgHandlerName (Map Text Text))
+                           , config         :: !Config }
 
 instance Show BotConfig where
   show BotConfig { .. } = "server = "   ++ show server          ++ "\n" ++
@@ -118,7 +121,7 @@ instance Show BotConfig where
                           "channel = "  ++ show channel         ++ "\n" ++
                           "nick = "     ++ show botNick         ++ "\n" ++
                           "timeout = "  ++ show botTimeout      ++ "\n" ++
-                          "handlers = " ++ show msgHandlerNames
+                          "handlers = " ++ show (mapKeys msgHandlerInfo)
 
 data Bot = Bot { botConfig   :: !BotConfig
                , socket      :: !Handle
@@ -172,15 +175,21 @@ handleEvent :: MsgHandler -> BotConfig -> SomeEvent -> IO EventResponse
 handleEvent MsgHandler { .. } botConfig =
   flip runReaderT botConfig . _runMsgHandler . onEvent
 
+getHelp :: MsgHandler -> BotConfig -> IO (Map Text Text)
+getHelp MsgHandler { .. } botConfig =
+  flip runReaderT botConfig . _runMsgHandler $ onHelp
+
 data MsgHandler = MsgHandler {
   onMessage :: !(forall m . MonadMsgHandler m => Message -> m (Maybe Command)),
   onStop    :: !(forall m . MonadMsgHandler m => m ()),
-  onEvent   :: !(forall m . MonadMsgHandler m => SomeEvent -> m EventResponse)
+  onEvent   :: !(forall m . MonadMsgHandler m => SomeEvent -> m EventResponse),
+  onHelp    :: !(forall m . MonadMsgHandler m => m (Map Text Text))
 }
 
 newMsgHandler :: MsgHandler
 newMsgHandler = MsgHandler {
   onMessage = const $ return Nothing,
   onStop    = return (),
-  onEvent   = const $ return RespNothing
+  onEvent   = const $ return RespNothing,
+  onHelp    = return mempty
 }

@@ -29,13 +29,15 @@ connect botConfig@BotConfig { .. } = do
   hSetBuffering socket LineBuffering
   debugM "Connected"
 
-  lineChan    <- newChannel
-  commandChan <- newChannel
-  eventChan   <- newChannel
-  mvBotStatus <- newMVar Connected
-  msgHandlers <- loadMsgHandlers (fst eventChan)
-
-  return (Bot botConfig socket msgHandlers, mvBotStatus, lineChan, commandChan, eventChan)
+  lineChan        <- newChannel
+  commandChan     <- newChannel
+  eventChan       <- newChannel
+  mvBotStatus     <- newMVar Connected
+  msgHandlers     <- loadMsgHandlers (fst eventChan)
+  msgHandlerInfo' <- foldM (\m (hn, h) -> getHelp h botConfig >>= \hm -> return $ insertMap hn hm m)
+                       mempty (mapToList msgHandlers)
+  let botConfig'  = botConfig { msgHandlerInfo = msgHandlerInfo'}
+  return (Bot botConfig' socket msgHandlers, mvBotStatus, lineChan, commandChan, eventChan)
   where
     connectToWithRetry = connectTo (unpack server) (PortNumber (fromIntegral port))
                            `catch` (\(e :: SomeException) -> do
@@ -45,14 +47,15 @@ connect botConfig@BotConfig { .. } = do
 
     newChannel = (,) <$> newChan <*> newEmptyMVar
 
-    loadMsgHandlers eventChan = flip (`foldM` mempty) msgHandlerNames $ \hMap msgHandlerName -> do
-      debugM . unpack $ "Loading msg handler: " ++ msgHandlerName
-      mMsgHandler <- mkMsgHandler botConfig eventChan msgHandlerName
-      case mMsgHandler of
-        Nothing         -> do
-          debugM . unpack $ "No msg handler found with name: " ++ msgHandlerName
-          return hMap
-        Just msgHandler -> return $ insertMap msgHandlerName msgHandler hMap
+    loadMsgHandlers eventChan =
+      flip (`foldM` mempty) (mapKeys msgHandlerInfo) $ \hMap msgHandlerName -> do
+        debugM . unpack $ "Loading msg handler: " ++ msgHandlerName
+        mMsgHandler <- mkMsgHandler botConfig eventChan msgHandlerName
+        case mMsgHandler of
+          Nothing         -> do
+            debugM . unpack $ "No msg handler found with name: " ++ msgHandlerName
+            return hMap
+          Just msgHandler -> return $ insertMap msgHandlerName msgHandler hMap
 
 disconnect :: (Bot, MVar BotStatus, Channel Line, Channel Command, Channel SomeEvent) -> IO ()
 disconnect (Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch), (eventChan, eventLatch)) = do
@@ -85,7 +88,11 @@ runBot botConfig' = withSocketsDo $ do
     NickNotAvailable -> return ()
     _                -> error "Unsupported status"
   where
-    botConfig = botConfig' { msgHandlerNames = hashNub $ msgHandlerNames botConfig' ++ coreMsgHandlerNames }
+    botConfig = botConfig' {
+      msgHandlerInfo =
+        foldl' (\m name -> insertMap name mempty m) mempty
+          (hashNub $ mapKeys (msgHandlerInfo botConfig') ++ coreMsgHandlerNames)
+    }
 
     handleErrors :: SomeException -> IO BotStatus
     handleErrors e = case fromException e of

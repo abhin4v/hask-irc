@@ -128,13 +128,11 @@ messageProcessLoop lineChan commandChan !idleFor = do
 
   where
     dispatchHandlers Bot { .. } message =
-      forM_ (mapToList msgHandlers) $ \(_, msgHandler) -> fork $
+      forM_ (mapValues msgHandlers) $ \msgHandler -> fork $
         handle (\(e :: SomeException) ->
                   errorM $ "Exception while processing message: " ++ show e) $ do
           mCmd <- handleMessage msgHandler botConfig message
-          case mCmd of
-            Nothing  -> return ()
-            Just cmd -> sendCommand commandChan cmd
+          maybe (return ()) (sendCommand commandChan) mCmd
 
 eventProcessLoop :: Channel SomeEvent -> Chan Line -> Chan Command -> Bot -> IO ()
 eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
@@ -143,7 +141,7 @@ eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
     Just (QuitEvent, _) -> latchIt latch
     _                   -> do
       debugM $ "Event: " ++ show event
-      forM_ (mapToList msgHandlers) $ \(_, msgHandler) -> fork $
+      forM_ (mapValues msgHandlers) $ \msgHandler -> fork $
         handle (\(ex :: SomeException) ->
                   errorM $ "Exception while processing event: " ++ show ex) $ do
           resp <- handleEvent msgHandler botConfig event

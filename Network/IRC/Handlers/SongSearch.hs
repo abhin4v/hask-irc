@@ -26,7 +26,11 @@ import Network.IRC.Types
 $(deriveLoggers "HSL" [HSL.ERROR])
 
 mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
-mkMsgHandler _ _ "songsearch" = return . Just $ newMsgHandler { onMessage = songSearch }
+mkMsgHandler _ _ "songsearch" =
+  return . Just $ newMsgHandler { onMessage = songSearch,
+                                  onHelp    = return $ singletonMap "!m" helpMsg }
+  where
+    helpMsg = "Search for song. !m <song> or !m <artist> - <song>"
 mkMsgHandler _ _ _            = return Nothing
 
 data Song = NoSong | Song { url :: Text, name :: Text, artist :: Text }

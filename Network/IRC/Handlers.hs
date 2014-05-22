@@ -5,9 +5,9 @@
 
 module Network.IRC.Handlers (coreMsgHandlerNames, mkMsgHandler) where
 
-import qualified Network.IRC.Handlers.MessageLogger as L
-import qualified Network.IRC.Handlers.SongSearch as SS
-import qualified Network.IRC.Handlers.Auth as A
+import qualified Network.IRC.Handlers.MessageLogger as Logger
+import qualified Network.IRC.Handlers.SongSearch    as SongSearch
+import qualified Network.IRC.Handlers.Auth          as Auth
 
 import ClassyPrelude
 import Control.Concurrent.Lifted  (Chan)
@@ -17,12 +17,13 @@ import Data.Text                  (strip)
 import Data.Time                  (addUTCTime)
 
 import Network.IRC.Types
+import Network.IRC.Util
 
 clean :: Text -> Text
 clean = toLower . strip
 
 coreMsgHandlerNames :: [Text]
-coreMsgHandlerNames = ["pingpong", "messagelogger"]
+coreMsgHandlerNames = ["pingpong", "messagelogger", "help"]
 
 mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
 mkMsgHandler _ _ "greeter"  = return . Just $ newMsgHandler { onMessage = greeter }
@@ -30,9 +31,13 @@ mkMsgHandler _ _ "welcomer" = return . Just $ newMsgHandler { onMessage = welcom
 mkMsgHandler _ _ "pingpong" = do
   state <- getCurrentTime >>= newIORef
   return . Just $ newMsgHandler { onMessage = pingPong state }
+mkMsgHandler _ _ "help"     =
+    return . Just $ newMsgHandler { onMessage = help, onHelp = return $ singletonMap "!help" helpMsg}
+  where
+    helpMsg = "Get help. !help or !help <command>"
 
 mkMsgHandler botConfig eventChan name =
-  flip (`foldM` Nothing) [L.mkMsgHandler, SS.mkMsgHandler, A.mkMsgHandler] $ \acc h ->
+  flip (`foldM` Nothing) [Logger.mkMsgHandler, SongSearch.mkMsgHandler, Auth.mkMsgHandler] $ \acc h ->
     case acc of
       Just _  -> return acc
       Nothing -> h botConfig eventChan name
@@ -72,3 +77,18 @@ welcomer JoinMsg { .. } = do
     else return Nothing
 
 welcomer _ = return Nothing
+
+help :: MonadMsgHandler m => Message -> m (Maybe Command)
+help ChannelMsg { .. }
+  | "!help" == clean msg = do
+      BotConfig { .. } <- ask
+      let commands = concatMap mapKeys . mapValues $ msgHandlerInfo
+      return . Just . ChannelMsgReply $ "I know these commands: " ++ unwords commands
+  | "!help" `isPrefixOf` msg = do
+      BotConfig { .. } <- ask
+      let command = clean . unwords . drop 1 . words $ msg
+      let mHelp   = find ((== command) . fst) . concatMap mapToList . mapValues $ msgHandlerInfo
+      return . Just . ChannelMsgReply $ maybe ("No such command found: " ++ command) snd mHelp
+
+help _ = return Nothing
+

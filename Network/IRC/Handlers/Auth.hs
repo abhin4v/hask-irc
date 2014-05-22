@@ -15,16 +15,15 @@ import ClassyPrelude
 import Control.Concurrent.Lifted (Chan)
 import Control.Monad.Reader      (asks)
 import Control.Monad.State       (get, put)
-import Data.Acid                 (AcidState, Query, Update, makeAcidic, openLocalState)
-import Data.Acid.Advanced        (query', update')
+import Data.Acid                 (AcidState, Query, Update, makeAcidic, query, update,
+                                  openLocalState, createArchive)
 import Data.Acid.Local           (createCheckpointAndClose)
 import Data.SafeCopy             (base, deriveSafeCopy)
 
 import Network.IRC.Handlers.Auth.Types
 import Network.IRC.Types
 
-emptyAuth :: Auth
-emptyAuth = Auth mempty
+-- database
 
 $(deriveSafeCopy 0 'base ''Auth)
 
@@ -41,40 +40,46 @@ $(makeAcidic ''Auth ['getToken, 'saveToken, 'deleteToken])
 
 issueToken :: AcidState Auth -> Nick -> IO Token
 issueToken acid user = do
-  mt <- query' acid (GetToken user)
+  mt <- query acid (GetToken user)
   case mt of
     Just t -> return t
     Nothing -> do
       token <- map (pack . U.toString) U.nextRandom
-      update' acid (SaveToken user token)
+      update acid (SaveToken user token)
       return token
+
+-- handler
 
 authMessage :: MonadMsgHandler m => IORef (AcidState Auth) -> Message ->  m (Maybe Command)
 authMessage state PrivMsg { .. }
-  | "token" `isPrefixOf` msg = liftIO $ do
-      acid  <- readIORef state
-      token <- issueToken acid (userNick user)
-      return . Just $ PrivMsgReply user token
+  | "token" `isPrefixOf` msg = map (Just . PrivMsgReply user) . liftIO $
+      readIORef state >>= flip issueToken (userNick user)
 authMessage _ _ = return Nothing
 
 stopAuth :: MonadMsgHandler m => IORef (AcidState Auth) -> m ()
-stopAuth state = liftIO $ readIORef state >>= createCheckpointAndClose
+stopAuth state = liftIO $ do
+  acid <- readIORef state
+  createArchive acid
+  createCheckpointAndClose acid
 
 authEvent :: MonadMsgHandler m => IORef (AcidState Auth) -> SomeEvent -> m EventResponse
 authEvent state event = case fromEvent event of
   Just (AuthEvent user token reply, _) -> liftIO $ do
     acid <- readIORef state
-    mt <- query' acid (GetToken user)
+    mt   <- query acid (GetToken user)
     case mt of
       Just t  -> putMVar reply (t == token)
       Nothing -> putMVar reply False
     return RespNothing
-  _                                 -> return RespNothing
+  _                                    -> return RespNothing
 
 mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
-mkMsgHandler _ _ "auth" = do
+mkMsgHandler BotConfig { .. } _ "auth" = do
   state <- liftIO (openLocalState emptyAuth >>= newIORef)
   return . Just $ newMsgHandler { onMessage = authMessage state
                                 , onEvent   = authEvent state
-                                , onStop    = stopAuth state }
-mkMsgHandler _ _ _                       = return Nothing
+                                , onStop    = stopAuth state
+                                , onHelp    = return $ singletonMap "token" helpMsg }
+  where
+    helpMsg = "Send a PM to get a new auth token. /msg " ++ botNick ++ " token"
+mkMsgHandler _ _ _                     = return Nothing

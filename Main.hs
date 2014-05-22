@@ -1,6 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main (main) where
 
@@ -56,14 +57,17 @@ loadBotConfig configFile = do
   case eCfg of
     Left (ParseError _ _) -> error "Error while loading config"
     Right cfg             -> do
-      eBotConfig <- try $ BotConfig                    <$>
-                          CF.require cfg "server"      <*>
-                          CF.require cfg "port"        <*>
-                          CF.require cfg "channel"     <*>
-                          CF.require cfg "nick"        <*>
-                          CF.require cfg "timeout"     <*>
-                          CF.require cfg "msghandlers" <*>
-                          pure cfg
+      eBotConfig <- try $ do
+        handlers :: [Text] <- CF.require cfg "msghandlers"
+        let handlerInfo = foldl' (\m h -> insertMap h mempty m) mempty handlers
+        BotConfig                  <$>
+          CF.require cfg "server"  <*>
+          CF.require cfg "port"    <*>
+          CF.require cfg "channel" <*>
+          CF.require cfg "nick"    <*>
+          CF.require cfg "timeout" <*>
+          pure handlerInfo         <*>
+          pure cfg
 
       case eBotConfig of
         Left (KeyError k) -> error $ "Error while reading key from config: " ++ unpack k

@@ -22,3 +22,9 @@ awaitLatch :: Latch -> IO ()
 awaitLatch latch = void $ takeMVar latch
 
 type Channel a = (Chan a, Latch)
+
+mapKeys :: IsMap map => map -> [ContainerKey map]
+mapKeys   = map fst . mapToList
+
+mapValues :: IsMap map => map -> [MapValue map]
+mapValues = map snd . mapToList
