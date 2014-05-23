@@ -32,3 +32,6 @@ whenJust m f = maybe (return ()) f m
 
 clean :: Text -> Text
 clean = toLower . strip
+
+io :: MonadIO m => IO a -> m a
+io = liftIO

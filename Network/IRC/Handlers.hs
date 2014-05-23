@@ -45,15 +45,15 @@ mkMsgHandler botConfig eventChan name =
 
 pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m (Maybe Command)
 pingPong state PingMsg { .. } = do
-  liftIO $ atomicWriteIORef state msgTime
+  io $ atomicWriteIORef state msgTime
   return . Just $ PongCmd msg
 pingPong state PongMsg { .. } = do
-  liftIO $ atomicWriteIORef state msgTime
+  io $ atomicWriteIORef state msgTime
   return Nothing
 pingPong state IdleMsg { .. } | even (convert msgTime :: Int) = do
   BotConfig { .. } <- ask
   let limit = fromIntegral $ botTimeout `div` 2
-  liftIO $ do
+  io $ do
     lastComm <- readIORef state
     if addUTCTime limit lastComm < msgTime
       then return . Just . PingCmd . pack . formatTime defaultTimeLocale "%s" $ msgTime

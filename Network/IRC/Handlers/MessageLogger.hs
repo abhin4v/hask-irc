@@ -26,7 +26,7 @@ type LoggerState = Maybe (Handle, Day)
 
 mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
 mkMsgHandler botConfig _ "messagelogger" = do
-  state <- liftIO $ newIORef Nothing
+  state <- io $ newIORef Nothing
   initMessageLogger botConfig state
   return . Just $ newMsgHandler { onMessage = flip messageLogger state
                                 , onStop    = exitMessageLogger state }
@@ -52,12 +52,12 @@ initMessageLogger botConfig state = do
   atomicWriteIORef state $ Just (logFileHandle, utctDay time)
 
 exitMessageLogger :: MonadMsgHandler m => IORef LoggerState -> m ()
-exitMessageLogger state = liftIO $ readIORef state >>= flip whenJust (hClose . fst)
+exitMessageLogger state = io $ readIORef state >>= flip whenJust (hClose . fst)
 
 withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> IORef LoggerState -> m (Maybe Command)
 withLogFile action state = do
   botConfig <- ask
-  liftIO $ do
+  io $ do
     Just (logFileHandle, prevDay) <- readIORef state
     curDay                        <- map utctDay getCurrentTime
     let diff                      = diffDays curDay prevDay
@@ -92,7 +92,3 @@ messageLogger message = case message of
       TF.hprint logFile ("[{}] " ++ format ++ "\n") $ TF.buildParams (fmtTime (msgTime message) : args)
 
     fmtTime = pack . formatTime defaultTimeLocale "%F %T"
-
---messageLogger IdleMsg = const . liftIO $ do
---  now <- getCurrentTime
---  return . Just . MessageCmd $

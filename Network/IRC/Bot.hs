@@ -93,7 +93,7 @@ messageProcessLoop lineChan commandChan !idleFor = do
   bot@Bot { .. } <- ask
   let nick       = botNick botConfig
 
-  nStatus <- liftIO . mask_ $
+  nStatus <- io . mask_ $
     if idleFor >= (oneSec * botTimeout botConfig)
       then infoM "Timeout" >> return Disconnected
       else do

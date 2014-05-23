@@ -21,6 +21,7 @@ import Data.Acid.Local           (createCheckpointAndClose)
 
 import Network.IRC.Handlers.Auth.Types
 import Network.IRC.Types
+import Network.IRC.Util
 
 -- database
 
@@ -49,19 +50,19 @@ issueToken acid user = do
 
 authMessage :: MonadMsgHandler m => IORef (AcidState Auth) -> Message ->  m (Maybe Command)
 authMessage state PrivMsg { .. }
-  | "token" `isPrefixOf` msg = map (Just . PrivMsgReply user) . liftIO $
+  | "token" `isPrefixOf` msg = map (Just . PrivMsgReply user) . io $
       readIORef state >>= flip issueToken (userNick user)
 authMessage _ _ = return Nothing
 
 stopAuth :: MonadMsgHandler m => IORef (AcidState Auth) -> m ()
-stopAuth state = liftIO $ do
+stopAuth state = io $ do
   acid <- readIORef state
   createArchive acid
   createCheckpointAndClose acid
 
 authEvent :: MonadMsgHandler m => IORef (AcidState Auth) -> SomeEvent -> m EventResponse
 authEvent state event = case fromEvent event of
-  Just (AuthEvent user token reply, _) -> liftIO $ do
+  Just (AuthEvent user token reply, _) -> io $ do
     acid <- readIORef state
     mt   <- query acid (GetToken user)
     case mt of
@@ -72,7 +73,7 @@ authEvent state event = case fromEvent event of
 
 mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
 mkMsgHandler BotConfig { .. } _ "auth" = do
-  state <- liftIO (openLocalState emptyAuth >>= newIORef)
+  state <- io (openLocalState emptyAuth >>= newIORef)
   return . Just $ newMsgHandler { onMessage = authMessage state
                                 , onEvent   = authEvent state
                                 , onStop    = stopAuth state
