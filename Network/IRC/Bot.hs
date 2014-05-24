@@ -1,8 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Network.IRC.Bot
@@ -126,7 +121,7 @@ messageProcessLoop lineChan commandChan !idleFor = do
 
   where
     dispatchHandlers Bot { .. } message =
-      forM_ (mapValues msgHandlers) $ \msgHandler -> fork $
+      forM_ (mapValues msgHandlers) $ \msgHandler -> void . fork $
         handle (\(e :: SomeException) ->
                   errorM $ "Exception while processing message: " ++ show e) $ do
           mCmd <- handleMessage msgHandler botConfig message
@@ -139,7 +134,7 @@ eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
     Just (QuitEvent, _) -> latchIt latch
     _                   -> do
       debugM $ "Event: " ++ show event
-      forM_ (mapValues msgHandlers) $ \msgHandler -> fork $
+      forM_ (mapValues msgHandlers) $ \msgHandler -> void . fork $
         handle (\(ex :: SomeException) ->
                   errorM $ "Exception while processing event: " ++ show ex) $ do
           resp <- handleEvent msgHandler botConfig event

@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Network.IRC.Handlers.NickTracker.Types where
@@ -14,11 +13,11 @@ newtype CanonicalNick = CanonicalNick Text deriving (Eq, Ord, Show, Data, Typeab
 newtype LastSeenOn = LastSeenOn UTCTime deriving (Eq, Ord, Show, Data, Typeable)
 
 data NickTrack = NickTrack {
-  nick          :: Nick,
-  canonicalNick :: CanonicalNick,
-  lastSeenOn    :: LastSeenOn,
-  lastMessageOn :: UTCTime,
-  lastMessage   :: Text
+  nick          :: !Nick,
+  canonicalNick :: !CanonicalNick,
+  lastSeenOn    :: !LastSeenOn,
+  lastMessageOn :: !UTCTime,
+  lastMessage   :: !Text
 } deriving (Eq, Ord, Show, Data, Typeable)
 
 instance Indexable NickTrack where

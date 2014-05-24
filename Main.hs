@@ -1,7 +1,4 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverlappingInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main (main) where
 
