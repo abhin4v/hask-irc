@@ -4,13 +4,13 @@
 module Network.IRC.Handlers.NickTracker.Types where
 
 import ClassyPrelude
-import Data.Data (Data)
-import Data.IxSet (IxSet, Indexable (..), ixSet, ixFun)
-import Data.SafeCopy             (base, deriveSafeCopy)
+import Data.Data     (Data)
+import Data.IxSet    (IxSet, Indexable (..), ixSet, ixFun)
+import Data.SafeCopy (base, deriveSafeCopy)
 
-newtype Nick = Nick Text deriving (Eq, Ord, Show, Data, Typeable)
+newtype Nick          = Nick Text          deriving (Eq, Ord, Show, Data, Typeable)
 newtype CanonicalNick = CanonicalNick Text deriving (Eq, Ord, Show, Data, Typeable)
-newtype LastSeenOn = LastSeenOn UTCTime deriving (Eq, Ord, Show, Data, Typeable)
+newtype LastSeenOn    = LastSeenOn UTCTime deriving (Eq, Ord, Show, Data, Typeable)
 
 data NickTrack = NickTrack {
   nick          :: !Nick,
@@ -25,14 +25,13 @@ instance Indexable NickTrack where
                 , ixFun $ (: []) . canonicalNick
                 , ixFun $ (: []) . lastSeenOn ]
 
+newtype NickTracking = NickTracking { nickTracking :: IxSet NickTrack }
+                       deriving (Eq, Ord, Show, Data, Typeable)
+
 $(deriveSafeCopy 0 'base ''Nick)
 $(deriveSafeCopy 0 'base ''CanonicalNick)
 $(deriveSafeCopy 0 'base ''LastSeenOn)
 $(deriveSafeCopy 0 'base ''NickTrack)
-
-newtype NickTracking = NickTracking { nickTracking :: IxSet NickTrack }
-                       deriving (Eq, Ord, Show, Data, Typeable)
-
 $(deriveSafeCopy 0 'base ''NickTracking)
 
 emptyNickTracking :: NickTracking

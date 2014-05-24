@@ -5,12 +5,12 @@
 module Network.IRC.Handlers.Auth.Types where
 
 import ClassyPrelude
-import Data.Data (Data)
-import Data.SafeCopy             (base, deriveSafeCopy)
+import Data.Data      (Data)
+import Data.SafeCopy  (base, deriveSafeCopy)
 
 import Network.IRC.Types hiding (user)
 
-type Token = Text
+type Token   = Text
 newtype Auth = Auth { auth :: Map Nick Token } deriving (Eq, Show, Data, Typeable)
 
 emptyAuth :: Auth

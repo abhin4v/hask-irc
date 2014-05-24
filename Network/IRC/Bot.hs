@@ -12,7 +12,7 @@ module Network.IRC.Bot
   , eventProcessLoop )
 where
 
-import qualified Data.Text.Format as TF
+import qualified Data.Text.Format  as TF
 import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
@@ -97,10 +97,11 @@ messageProcessLoop lineChan commandChan !idleFor = do
 
         mLine <- readLine lineChan
         case mLine of
-          Timeout      -> getCurrentTime >>= dispatchHandlers bot . IdleMsg  >> return Idle
+          Timeout      ->
+            getCurrentTime >>= \t -> dispatchHandlers bot (Message t "" IdleMsg)  >> return Idle
           EOF          -> infoM "Connection closed" >> return Disconnected
-          Line message -> do
-            nStatus <- case message of
+          Line (message@Message { .. }) -> do
+            nStatus <- case msgDetails of
               JoinMsg { .. } | userNick user == nick -> infoM "Joined" >> return Joined
               KickMsg { .. } | kickedNick == nick    -> infoM "Kicked" >> return Kicked
               NickInUseMsg { .. }                    ->

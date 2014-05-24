@@ -10,6 +10,7 @@ module Network.IRC.Types
   , MsgHandlerName
   , User (..)
   , Message (..)
+  , MessageDetails (..)
   , Command (..)
   , Event (..)
   , SomeEvent
@@ -45,25 +46,25 @@ type MsgHandlerName = Text
 data User = Self | User { userNick :: !Nick, userServer :: !Text }
             deriving (Show, Eq)
 
-data Message =
-    IdleMsg      { msgTime  :: !UTCTime}
-  | PingMsg      { msgTime  :: !UTCTime, msg     :: !Text, msgLine     :: !Text }
-  | PongMsg      { msgTime  :: !UTCTime, msg     :: !Text, msgLine     :: !Text }
-  | ChannelMsg   { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
-  | PrivMsg      { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
-  | ActionMsg    { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
-  | JoinMsg      { msgTime  :: !UTCTime, user    :: !User, msgLine     :: !Text }
-  | QuitMsg      { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
-  | PartMsg      { msgTime  :: !UTCTime, user    :: !User, msg         :: !Text, msgLine :: !Text }
-  | NickMsg      { msgTime  :: !UTCTime, user    :: !User, newNick     :: !Nick, msgLine :: !Text }
-  | NickInUseMsg { msgTime  :: !UTCTime, msgLine :: !Text }
-  | KickMsg      { msgTime  :: !UTCTime, user    :: !User, kickedNick  :: !Nick, msg     :: !Text
-                 , msgLine  :: !Text }
-  | ModeMsg      { msgTime  :: !UTCTime, user    :: !User, target      :: !Text, mode    :: !Text
-                 , modeArgs :: ![Text], msgLine  :: !Text }
-  | NamesMsg     { msgTime  :: !UTCTime, nicks   :: ![Nick] }
-  | OtherMsg     { msgTime  :: !UTCTime, source  :: !Text, command     :: !Text, target  :: !Text
-                 , msg      :: !Text,   msgLine  :: !Text }
+data Message = Message { msgTime :: !UTCTime, msgLine :: !Text, msgDetails :: MessageDetails}
+               deriving (Show, Eq)
+
+data MessageDetails =
+    IdleMsg
+  | NickInUseMsg
+  | PingMsg      { msg       :: !Text }
+  | PongMsg      { msg       :: !Text }
+  | NamesMsg     { nicks     :: ![Nick] }
+  | ChannelMsg   { user      :: !User, msg        :: !Text }
+  | PrivMsg      { user      :: !User, msg        :: !Text }
+  | ActionMsg    { user      :: !User, msg        :: !Text }
+  | JoinMsg      { user      :: !User }
+  | QuitMsg      { user      :: !User, msg        :: !Text }
+  | PartMsg      { user      :: !User, msg        :: !Text }
+  | NickMsg      { user      :: !User, newNick    :: !Nick }
+  | KickMsg      { user      :: !User, kickedNick :: !Nick, msg       :: !Text }
+  | ModeMsg      { user      :: !User, msgTarget  :: !Text, mode      :: !Text , modeArgs :: ![Text] }
+  | OtherMsg     { msgSource :: !Text, msgCommand :: !Text, msgTarget :: !Text , msg      :: !Text }
   deriving (Show, Eq)
 
 data Command =
@@ -113,11 +114,11 @@ data BotConfig = BotConfig { server         :: !Text
                            , config         :: !Config }
 
 instance Show BotConfig where
-  show BotConfig { .. } = "server = "   ++ show server          ++ "\n" ++
-                          "port = "     ++ show port            ++ "\n" ++
-                          "channel = "  ++ show channel         ++ "\n" ++
-                          "nick = "     ++ show botNick         ++ "\n" ++
-                          "timeout = "  ++ show botTimeout      ++ "\n" ++
+  show BotConfig { .. } = "server = "   ++ show server     ++ "\n" ++
+                          "port = "     ++ show port       ++ "\n" ++
+                          "channel = "  ++ show channel    ++ "\n" ++
+                          "nick = "     ++ show botNick    ++ "\n" ++
+                          "timeout = "  ++ show botTimeout ++ "\n" ++
                           "handlers = " ++ show (mapKeys msgHandlerInfo)
 
 data Bot = Bot { botConfig   :: !BotConfig
@@ -148,11 +149,11 @@ runIRC bot botStatus = flip runReaderT bot . flip execStateT botStatus . _runIRC
 -- Message handlers
 
 newtype MsgHandlerT a = MsgHandlerT { _runMsgHandler :: ReaderT BotConfig IO a }
-                     deriving ( Functor
-                              , Applicative
-                              , Monad
-                              , MonadIO
-                              , MonadReader BotConfig )
+                        deriving ( Functor
+                                 , Applicative
+                                 , Monad
+                                 , MonadIO
+                                 , MonadReader BotConfig )
 
 class (MonadIO m, Applicative m, MonadReader BotConfig m) => MonadMsgHandler m where
   msgHandler :: MsgHandlerT a -> m a

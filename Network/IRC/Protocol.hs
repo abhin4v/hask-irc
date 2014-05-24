@@ -1,4 +1,4 @@
-module Network.IRC.Protocol (msgFromLine, lineFromCommand) where
+module Network.IRC.Protocol (MessageParser, msgFromLine, lineFromCommand) where
 
 import ClassyPrelude
 import Data.List ((!!))
@@ -6,25 +6,27 @@ import Data.Text (split, strip)
 
 import Network.IRC.Types
 
-msgFromLine :: BotConfig -> UTCTime -> Text -> Message
+type MessageParser = BotConfig -> UTCTime -> Text -> Message
+
+msgFromLine :: MessageParser
 msgFromLine (BotConfig { .. }) time line
-  | "PING :" `isPrefixOf` line = PingMsg time (drop 6 line) line
+  | "PING :" `isPrefixOf` line = Message time line $ PingMsg (drop 6 line)
   | otherwise = case command of
-      "PONG"    -> PongMsg time message line
-      "JOIN"    -> JoinMsg time user line
-      "QUIT"    -> QuitMsg time user quitMessage line
-      "PART"    -> PartMsg time user message line
-      "KICK"    -> KickMsg time user kicked kickReason line
+      "PONG"    -> Message time line $ PongMsg message
+      "JOIN"    -> Message time line $ JoinMsg user
+      "QUIT"    -> Message time line $ QuitMsg user quitMessage
+      "PART"    -> Message time line $ PartMsg user message
+      "KICK"    -> Message time line $ KickMsg user kicked kickReason
       "MODE"    -> if source == botNick
-                     then ModeMsg time Self target message [] line
-                     else ModeMsg time user target mode modeArgs line
-      "NICK"    -> NickMsg time user (drop 1 target) line
-      "353"     -> NamesMsg time namesNicks
-      "433"     -> NickInUseMsg time line
-      "PRIVMSG" | target /= channel -> PrivMsg time user message line
-                | isActionMsg       -> ActionMsg time user (initDef . drop 8 $ message) line
-                | otherwise         -> ChannelMsg time user message line
-      _         -> OtherMsg time source command target message line
+                     then Message time line $ ModeMsg Self target message []
+                     else Message time line $ ModeMsg user target mode modeArgs
+      "NICK"    -> Message time line $ NickMsg user (drop 1 target)
+      "353"     -> Message time line $ NamesMsg namesNicks
+      "433"     -> Message time line NickInUseMsg
+      "PRIVMSG" | target /= channel -> Message time line $ PrivMsg user message
+                | isActionMsg       -> Message time line $ ActionMsg user (initDef . drop 8 $ message)
+                | otherwise         -> Message time line $ ChannelMsg user message
+      _         -> Message time line $ OtherMsg source command target message
   where
     isSpc           = (== ' ')
     isNotSpc        = not . isSpc
@@ -40,8 +42,7 @@ msgFromLine (BotConfig { .. }) time line
     kicked          = splits !! 3
     kickReason      = drop 1 . unwords . drop 4 $ splits
 
-    nickPrefixes :: String
-    nickPrefixes    = "~&@%+"
+    nickPrefixes    = "~&@%+" :: String
     namesNicks      = map stripNickPrefix . words . drop 1 . unwords . drop 5 $ splits
     stripNickPrefix = pack . dropWhile (`elem` nickPrefixes) . unpack
 

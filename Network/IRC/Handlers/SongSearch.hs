@@ -42,7 +42,7 @@ instance FromJSON Song where
     parseJSON _                   = mempty
 
 songSearch :: MonadMsgHandler m => Message -> m (Maybe Command)
-songSearch ChannelMsg { .. }
+songSearch Message { msgDetails = ChannelMsg { .. }, .. }
   | "!m " `isPrefixOf` msg = do
       BotConfig { .. } <- ask
       liftIO $ do

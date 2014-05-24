@@ -2,8 +2,8 @@
 
 module Network.IRC.Handlers.MessageLogger (mkMsgHandler) where
 
-import qualified Data.Configurator as C
-import qualified Data.Text.Format as TF
+import qualified Data.Configurator       as C
+import qualified Data.Text.Format        as TF
 import qualified Data.Text.Format.Params as TF
 
 import ClassyPrelude hiding      ((</>), (<.>), FilePath, log)
@@ -73,7 +73,7 @@ withLogFile action state = do
   return Nothing
 
 messageLogger :: MonadMsgHandler m => Message -> IORef LoggerState -> m (Maybe Command)
-messageLogger message = case message of
+messageLogger Message { .. } = case msgDetails of
   ChannelMsg { .. } -> log "<{}> {}"                  [userNick user, msg]
   ActionMsg { .. }  -> log "<{}> {} {}"               [userNick user, userNick user, msg]
   KickMsg { .. }    -> log "** {} KICKED {} :{}"      [userNick user, kickedNick, msg]
@@ -85,6 +85,6 @@ messageLogger message = case message of
   _                 -> const $ return Nothing
   where
     log format args = withLogFile $ \logFile ->
-      TF.hprint logFile ("[{}] " ++ format ++ "\n") $ TF.buildParams (fmtTime (msgTime message) : args)
+      TF.hprint logFile ("[{}] " ++ format ++ "\n") $ TF.buildParams (fmtTime msgTime : args)
 
     fmtTime = pack . formatTime defaultTimeLocale "%F %T"

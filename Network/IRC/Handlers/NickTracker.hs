@@ -5,8 +5,8 @@
 
 module Network.IRC.Handlers.NickTracker (mkMsgHandler) where
 
-import qualified Data.IxSet as IS
-import qualified Data.UUID as U
+import qualified Data.IxSet   as IS
+import qualified Data.UUID    as U
 import qualified Data.UUID.V4 as U
 
 import ClassyPrelude
@@ -40,7 +40,7 @@ saveNickTrack nt = do
 $(makeAcidic ''NickTracking ['getByNick, 'getByCanonicalNick, 'saveNickTrack])
 
 nickTrackerMsg :: MonadMsgHandler m => IORef (AcidState NickTracking) -> Message ->  m (Maybe Command)
-nickTrackerMsg state message = case message of
+nickTrackerMsg state Message { .. } = case msgDetails of
   ChannelMsg { .. } -> updateNickTrack state user msg msgTime        >> handleCommands msg
   ActionMsg { .. }  -> updateNickTrack state user msg msgTime        >> return Nothing
   JoinMsg { .. }    -> updateNickTrack state user "" msgTime         >> return Nothing
@@ -66,9 +66,7 @@ updateNickTrack state user message msgTime = io $ do
   (message', lastMessageOn', cn) <- case (message, mnt) of
     ("", Just (NickTrack { .. })) -> return (lastMessage, lastMessageOn, canonicalNick)
     (_, Just (NickTrack { .. }))  -> return (message, msgTime, canonicalNick)
-    _                             -> do
-     cn <- newCanonicalNick
-     return (message, msgTime, cn)
+    _                             -> newCanonicalNick >>= \cn -> return (message, msgTime, cn)
 
   update acid . SaveNickTrack $
     NickTrack (Nick nck) cn (LastSeenOn msgTime) lastMessageOn' message'
@@ -138,7 +136,7 @@ stopNickTracker state = io $ do
 
 mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
 mkMsgHandler BotConfig { .. } _ "nicktracker" = do
-  state <- io (openLocalState emptyNickTracking >>= newIORef)
+  state <- io $ openLocalState emptyNickTracking >>= newIORef
   return . Just $ newMsgHandler { onMessage = nickTrackerMsg state
                                 , onStop    = stopNickTracker state
                                 , onHelp    = return helpMsgs }

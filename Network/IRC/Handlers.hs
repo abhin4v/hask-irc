@@ -35,31 +35,32 @@ mkMsgHandler botConfig eventChan name =
   flip (`foldM` Nothing) [ Logger.mkMsgHandler
                          , SongSearch.mkMsgHandler
                          , Auth.mkMsgHandler
-                         , NickTracker.mkMsgHandler ]
-    $ \acc h -> case acc of
-                  Just _  -> return acc
-                  Nothing -> h botConfig eventChan name
+                         , NickTracker.mkMsgHandler ] $ \handlers handler ->
+    case handlers of
+      Just _  -> return handlers
+      Nothing -> handler botConfig eventChan name
 
 pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m (Maybe Command)
-pingPong state PingMsg { .. } = do
+pingPong state Message { msgDetails = PingMsg { .. }, .. } = do
   io $ atomicWriteIORef state msgTime
   return . Just $ PongCmd msg
-pingPong state PongMsg { .. } = do
+pingPong state Message { msgDetails = PongMsg { .. }, .. } = do
   io $ atomicWriteIORef state msgTime
   return Nothing
-pingPong state IdleMsg { .. } | even (convert msgTime :: Int) = do
-  BotConfig { .. } <- ask
-  let limit = fromIntegral $ botTimeout `div` 2
-  io $ do
-    lastComm <- readIORef state
-    if addUTCTime limit lastComm < msgTime
-      then return . Just . PingCmd . pack . formatTime defaultTimeLocale "%s" $ msgTime
-      else return Nothing
+pingPong state Message { msgDetails = IdleMsg { .. }, .. }
+  | even (convert msgTime :: Int) = do
+    BotConfig { .. } <- ask
+    let limit = fromIntegral $ botTimeout `div` 2
+    io $ do
+      lastComm <- readIORef state
+      if addUTCTime limit lastComm < msgTime
+        then return . Just . PingCmd . pack . formatTime defaultTimeLocale "%s" $ msgTime
+        else return Nothing
 
 pingPong _ _ = return Nothing
 
 greeter ::  MonadMsgHandler m => Message -> m (Maybe Command)
-greeter ChannelMsg { .. } =
+greeter Message { msgDetails = ChannelMsg { .. }, .. } =
   return . map (ChannelMsgReply . (++ userNick user) . (++ " ")) . find (== clean msg) $ greetings
   where
     greetings = [ "hi", "hello", "hey", "sup", "bye"
@@ -67,7 +68,7 @@ greeter ChannelMsg { .. } =
 greeter _ = return Nothing
 
 welcomer :: MonadMsgHandler m => Message -> m (Maybe Command)
-welcomer JoinMsg { .. } = do
+welcomer Message { msgDetails = JoinMsg { .. }, .. } = do
   BotConfig { .. } <- ask
   if userNick user /= botNick
     then return . Just . ChannelMsgReply $ "welcome back " ++ userNick user
@@ -76,7 +77,7 @@ welcomer JoinMsg { .. } = do
 welcomer _ = return Nothing
 
 help :: MonadMsgHandler m => Message -> m (Maybe Command)
-help ChannelMsg { .. }
+help Message { msgDetails = ChannelMsg { .. }, .. }
   | "!help" == clean msg = do
       BotConfig { .. } <- ask
       let commands = concatMap mapKeys . mapValues $ msgHandlerInfo

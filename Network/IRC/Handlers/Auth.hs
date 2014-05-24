@@ -5,7 +5,7 @@
 
 module Network.IRC.Handlers.Auth (mkMsgHandler) where
 
-import qualified Data.UUID as U
+import qualified Data.UUID    as U
 import qualified Data.UUID.V4 as U
 
 import ClassyPrelude
@@ -46,7 +46,7 @@ issueToken acid user = do
 -- handler
 
 authMessage :: MonadMsgHandler m => IORef (AcidState Auth) -> Message ->  m (Maybe Command)
-authMessage state PrivMsg { .. }
+authMessage state Message { msgDetails = PrivMsg { .. }, .. }
   | "token" `isPrefixOf` msg = map (Just . PrivMsgReply user) . io $
       readIORef state >>= flip issueToken (userNick user)
 authMessage _ _ = return Nothing
@@ -70,7 +70,7 @@ authEvent state event = case fromEvent event of
 
 mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
 mkMsgHandler BotConfig { .. } _ "auth" = do
-  state <- io (openLocalState emptyAuth >>= newIORef)
+  state <- io $ openLocalState emptyAuth >>= newIORef
   return . Just $ newMsgHandler { onMessage = authMessage state
                                 , onEvent   = authEvent state
                                 , onStop    = stopAuth state

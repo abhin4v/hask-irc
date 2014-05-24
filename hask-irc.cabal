@@ -50,7 +50,7 @@ cabal-version:       >=1.10
 
 library
   default-extensions:  NoImplicitPrelude, OverloadedStrings, RecordWildCards, ScopedTypeVariables,
-                       BangPatterns, TupleSections
+                       BangPatterns, TupleSections, NamedFieldPuns
 
   build-depends:       base              >=4.5     && <4.8,
                        text              >=0.11    && <0.12,
@@ -93,7 +93,7 @@ executable hask-irc
 
   -- LANGUAGE extensions used by modules in this package.
   default-extensions:  NoImplicitPrelude, OverloadedStrings, RecordWildCards, ScopedTypeVariables,
-                       BangPatterns, TupleSections
+                       BangPatterns, TupleSections, NamedFieldPuns
 
   -- Other library packages from which modules are imported.
   build-depends:       base              >=4.5     && <4.8,
