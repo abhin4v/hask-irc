@@ -104,4 +104,4 @@ runBot botConfig' = withSocketsDo $ do
           fork $ sendCommandLoop (commandChan, sendLatch) bot
           fork $ readLineLoop mvBotStatus (lineChan, readLatch) bot oneSec
           fork $ eventProcessLoop eventChannel lineChan commandChan bot
-          runIRC bot Connected (messageProcessLoop lineChan commandChan 0)
+          runIRC bot Connected (messageProcessLoop lineChan commandChan)

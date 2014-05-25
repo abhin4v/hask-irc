@@ -35,9 +35,9 @@ mkMsgHandler botConfig eventChan name =
   flip (`foldM` Nothing) [ Logger.mkMsgHandler
                          , SongSearch.mkMsgHandler
                          , Auth.mkMsgHandler
-                         , NickTracker.mkMsgHandler ] $ \handlers handler ->
-    case handlers of
-      Just _  -> return handlers
+                         , NickTracker.mkMsgHandler ] $ \finalHandler handler ->
+    case finalHandler of
+      Just _  -> return finalHandler
       Nothing -> handler botConfig eventChan name
 
 pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m (Maybe Command)
