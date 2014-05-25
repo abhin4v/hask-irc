@@ -1,0 +1,10 @@
+language: haskell
+ghc: 7.8
+before_install:
+  - ./init-sandbox.sh
+  - "cd hask-irc-runner"
+notifications:
+  email: true
+  irc:
+    - "irc.immortal-anime.net#animestan"
+

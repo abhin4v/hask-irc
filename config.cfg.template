@@ -3,7 +3,7 @@ port = 6667
 channel = "#testtesttest"
 nick = "haskman"
 timeout = 130
-msghandlers = ["greeter", "welcomer", "songsearch", "auth", "nicktracker"]
+msghandlers = ["greeter", "welcomer", "messagelogger", "songsearch", "auth", "nicktracker"]
 
 songsearch {
   tinysong_apikey = "xxxyyyzzz"

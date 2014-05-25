@@ -16,7 +16,3 @@ cabal sandbox init --sandbox=../.cabal-sandbox
 cabal sandbox add-source ../hask-irc-core/
 cabal sandbox add-source ../hask-irc-handlers/
 cd ..
-
-cd hask-irc-core
-cabal install -j3 --only-dependencies
-cd ..
