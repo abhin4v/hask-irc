@@ -2,6 +2,7 @@ server = "irc.freenode.net"
 port = 6667
 channel = "#testtesttest"
 nick = "haskman"
+timeout = 130
 msghandlers = ["greeter", "welcomer", "songsearch", "auth", "nicktracker"]
 
 songsearch {
@@ -10,4 +11,8 @@ songsearch {
 
 messagelogger {
   logdir = "./logs/"
+}
+
+nicktracker {
+  refresh_interval = 60
 }

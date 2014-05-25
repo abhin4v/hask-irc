@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Network.IRC.Handlers.NickTracker.Types where
@@ -8,7 +7,7 @@ import Data.Data     (Data)
 import Data.IxSet    (IxSet, Indexable (..), ixSet, ixFun)
 import Data.SafeCopy (base, deriveSafeCopy)
 
-newtype Nick          = Nick Text          deriving (Eq, Ord, Show, Data, Typeable)
+newtype Nick          = Nick Text          deriving (Eq, Ord, Show, Data, Typeable, Hashable)
 newtype CanonicalNick = CanonicalNick Text deriving (Eq, Ord, Show, Data, Typeable)
 newtype LastSeenOn    = LastSeenOn UTCTime deriving (Eq, Ord, Show, Data, Typeable)
 

@@ -1,7 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Network.IRC.Util where
 
 import ClassyPrelude
+import Control.Arrow             (Arrow)
 import Control.Concurrent.Lifted (Chan)
+import Control.Monad.Base        (MonadBase)
 import Data.Text                 (strip)
 
 oneSec :: Int
@@ -31,3 +35,10 @@ clean = toLower . strip
 
 io :: MonadIO m => IO a -> m a
 io = liftIO
+
+both :: Arrow cat => cat b d -> cat (b, b) (d, d)
+both f = first f . second f
+
+atomicModIORef :: MonadBase IO f => IORef t -> (t -> t) -> f ()
+atomicModIORef ref f = void . atomicModifyIORef' ref $ \v -> (f v, v)
+

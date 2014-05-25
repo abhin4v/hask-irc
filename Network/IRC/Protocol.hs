@@ -9,8 +9,7 @@ import Data.Text (strip)
 
 import Network.IRC.Types
 
-data MessageParseType =   Names
-                        | Whois
+data MessageParseType = Names
                         deriving (Show, Eq)
 
 data MessagePart = MessagePart { msgParserType :: MessageParseType
@@ -28,38 +27,38 @@ type MessageParser = BotConfig -> UTCTime -> Text -> [MessagePart] -> MessagePar
 
 parseLine :: BotConfig -> UTCTime -> Text -> [MessagePart] -> (Maybe Message, [MessagePart])
 parseLine botConfig time line msgParts =
-  case lineParser botConfig time line msgParts of
-    Done message@(Message { msgDetails = OtherMsg { .. }, .. }) _ ->
-      fromMaybe (Just message, msgParts) . flip (`foldl'` Nothing) parsers $ \parseResult parser ->
-        case parseResult of
-          Just _  -> parseResult
-          Nothing -> case parser botConfig time line msgParts of
-                       Reject                  -> Nothing
-                       Partial msgParts'       -> Just (Nothing, msgParts')
-                       Done message' msgParts' -> Just (Just message', msgParts')
-    Done message _ -> (Just message, msgParts)
-    _              -> error "This should never happen"
+  fromMaybe (Nothing, msgParts) . flip (`foldl'` Nothing) parsers $ \parseResult parser ->
+    case parseResult of
+      Just _  -> parseResult
+      Nothing -> case parser botConfig time line msgParts of
+                   Reject                  -> Nothing
+                   Partial msgParts'       -> Just (Nothing, msgParts')
+                   Done message' msgParts' -> Just (Just message', msgParts')
   where
-    parsers = [namesParser]
+    parsers = [pingParser, namesParser, lineParser]
+
+pingParser :: MessageParser
+pingParser _ time line msgParts
+  | "PING :" `isPrefixOf` line = Done (Message time line . PingMsg . drop 6 $ line) msgParts
+  | otherwise                  = Reject
 
 lineParser :: MessageParser
-lineParser BotConfig { .. } time line msgParts
-  | "PING :" `isPrefixOf` line = flip Done msgParts $ Message time line $ PingMsg (drop 6 line)
-  | otherwise                  = flip Done msgParts $ case command of
-      "PONG"    -> Message time line $ PongMsg message
-      "JOIN"    -> Message time line $ JoinMsg user
-      "QUIT"    -> Message time line $ QuitMsg user quitMessage
-      "PART"    -> Message time line $ PartMsg user message
-      "KICK"    -> Message time line $ KickMsg user kicked kickReason
-      "MODE"    -> if source == botNick
-                     then Message time line $ ModeMsg Self target message []
-                     else Message time line $ ModeMsg user target mode modeArgs
-      "NICK"    -> Message time line $ NickMsg user (drop 1 target)
-      "433"     -> Message time line NickInUseMsg
-      "PRIVMSG" | target /= channel -> Message time line $ PrivMsg user message
-                | isActionMsg       -> Message time line $ ActionMsg user (initDef . drop 8 $ message)
-                | otherwise         -> Message time line $ ChannelMsg user message
-      _         -> Message time line $ OtherMsg source command target message
+lineParser BotConfig { .. } time line msgParts = flip Done msgParts . Message time line $
+  case command of
+    "PONG"    -> PongMsg message
+    "JOIN"    -> JoinMsg user
+    "QUIT"    -> QuitMsg user quitMessage
+    "PART"    -> PartMsg user message
+    "KICK"    -> KickMsg user kicked kickReason
+    "MODE"    -> if source == botNick
+                   then ModeMsg Self target message []
+                   else ModeMsg user target mode modeArgs
+    "NICK"    -> NickMsg user (drop 1 target)
+    "433"     -> NickInUseMsg
+    "PRIVMSG" | target /= channel -> PrivMsg user message
+              | isActionMsg       -> ActionMsg user (initDef . drop 8 $ message)
+              | otherwise         -> ChannelMsg user message
+    _         -> OtherMsg source command target message
   where
     splits          = words line
     command         = splits !! 1
@@ -91,7 +90,6 @@ namesParser BotConfig { .. } time line msgParts = case command of
     (_ : command : target : _) = words line
     stripNickPrefix  = pack . dropWhile (`elem` ("~&@%+" :: String)) . unpack
     namesNicks line' = map stripNickPrefix . words . drop 1 . unwords . drop 5 . words $ line'
-
 
 lineFromCommand :: BotConfig -> Command -> Maybe Text
 lineFromCommand BotConfig { .. } command = case command of

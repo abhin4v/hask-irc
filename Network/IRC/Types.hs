@@ -1,7 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -31,6 +29,7 @@ module Network.IRC.Types
 where
 
 import ClassyPrelude
+import Control.Monad.Base      (MonadBase)
 import Control.Monad.Reader    (ReaderT, MonadReader, runReaderT)
 import Control.Monad.State     (StateT, MonadState, execStateT)
 import Data.Configurator.Types (Config)
@@ -153,9 +152,10 @@ newtype MsgHandlerT a = MsgHandlerT { _runMsgHandler :: ReaderT BotConfig IO a }
                                  , Applicative
                                  , Monad
                                  , MonadIO
+                                 , MonadBase IO
                                  , MonadReader BotConfig )
 
-class (MonadIO m, Applicative m, MonadReader BotConfig m) => MonadMsgHandler m where
+class (MonadIO m, Applicative m, MonadReader BotConfig m, MonadBase IO m) => MonadMsgHandler m where
   msgHandler :: MsgHandlerT a -> m a
 
 instance MonadMsgHandler MsgHandlerT where
