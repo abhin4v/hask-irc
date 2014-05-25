@@ -11,13 +11,6 @@ before_install:
   - "cabal sandbox init --sandbox=../.cabal-sandbox"
   - "cabal sandbox add-source ../hask-irc-core/"
   - "cabal sandbox add-source ../hask-irc-handlers/"
-script:
-  - cd hask-irc-core
-  - cabal clean && cabal install
-  - cd ../hask-irc-handlers
-  - cabal clean && cabal install
-  - cd ../hask-irc-runner
-  - cabal clean && cabal install
 notifications:
   email: true
   irc:
