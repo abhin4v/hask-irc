@@ -1,6 +1,6 @@
 {-# LANGUAGE OverlappingInstances #-}
 
-module Main (main) where
+module Network.IRC.Runner (run) where
 
 import qualified Data.Configurator as CF
 
@@ -24,8 +24,8 @@ instance Configured a => Configured [a] where
   convert (List xs) = Just . mapMaybe convert $ xs
   convert _ = Nothing
 
-main :: IO ()
-main = do
+run :: IO ()
+run = do
   -- get args
   args <- getArgs
   prog <- getProgName

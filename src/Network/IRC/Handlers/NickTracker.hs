@@ -58,7 +58,7 @@ nickTrackerMsg state Message { .. } = case msgDetails of
   NickMsg { .. }    ->
     handleNickChange state user newNick msgTime >> swap (user, User newNick "") >> return Nothing
   NamesMsg { .. }   -> do
-    mapM_ (\n -> updateNickTrack state (User n "") "" msgTime) nicks
+    forM_ nicks $ \n -> updateNickTrack state (User n "") "" msgTime
     refresh nicks >> updateRefreshTime >> return Nothing
   IdleMsg { .. }    -> do
     NickTrackingState { .. } <- readIORef state
@@ -69,12 +69,12 @@ nickTrackerMsg state Message { .. } = case msgDetails of
   where
     updateRefreshTime = atomicModIORef state $ \ s -> s { lastRefreshOn = msgTime }
 
-    add    = atomicModIORef state . modifyOnlineNicks . flip ((. (Nick . userNick)) . flip insertSet)
-    remove = atomicModIORef state . modifyOnlineNicks . flip ((. (Nick . userNick)) . flip deleteSet)
+    add        = atomicModIORef state . modifyOnlineNicks . flip ((. (Nick . userNick)) . flip insertSet)
+    remove     = atomicModIORef state . modifyOnlineNicks . flip ((. (Nick . userNick)) . flip deleteSet)
     swap users = atomicModIORef state . modifyOnlineNicks $
       let (oNick, nNick) = both (Nick . userNick) users
       in deleteSet oNick . insertSet nNick
-    refresh = atomicModIORef state . modifyOnlineNicks . const . setFromList . map Nick
+    refresh    = atomicModIORef state . modifyOnlineNicks . const . setFromList . map Nick
 
     commands = [ ("!nick", handleNickCommand)
                , ("!seen", handleSeenCommand) ]
@@ -144,9 +144,10 @@ handleSeenCommand = withNickTracks $ \nck nickTracks onlineNicks -> do
                 , lastMessage   = lastMessage'
                 , nick          = Nick lastMessageAs } = maximumByEx (comparing lastMessageOn) nickTracks
 
-  return $ (if any (`member` onlineNicks) . map nick $ nickTracks
-              then nck ++ " is online now"
-              else nck ++ " was last seen on " ++ fmtTime lastSeenOn') ++
+  return $
+    (if any (`member` onlineNicks) . map nick $ nickTracks
+      then nck ++ " is online now"
+      else nck ++ " was last seen on " ++ fmtTime lastSeenOn') ++
     (if nck /= lastSeenAs then " as " ++ lastSeenAs else "") ++
     (if clean lastMessage' == "" then "" else
       " and at " ++ fmtTime lastMessageOn' ++ " " ++ nck ++
