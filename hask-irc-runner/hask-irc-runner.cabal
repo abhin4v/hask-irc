@@ -61,12 +61,15 @@ executable hask-irc
 
   -- Other library packages from which modules are imported.
   build-depends:       base                 >=4.5     && <4.8,
-                       hask-irc             ==0.1.0,
+                       hask-irc-core        ==0.1.0,
+                       hask-irc-handlers    ==0.1.0,
                        configurator         >=0.2     && <0.3,
                        classy-prelude       >=0.9     && <1.0,
+                       network              >=2.3     && <2.5,
                        lifted-base          >=0.2     && <0.3,
                        unix                 >=2.7     && <2.8,
-                       hslogger             >=1.2     && <1.3
+                       hslogger             >=1.2     && <1.3,
+                       hslogger-template    >=2.0     && <2.1
 
   -- Directories containing source files.
   -- hs-source-dirs:
