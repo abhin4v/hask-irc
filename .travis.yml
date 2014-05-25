@@ -1,10 +1,18 @@
 language: haskell
 ghc: 7.8
 before_install:
-  - ./init-sandbox.sh
-  - "cd hask-irc-runner"
+  - "cabal sandbox init"
+  - "cd hask-irc-core"
+  - "cabal sandbox init --sandbox=../.cabal-sandbox"
+  - "cd ../hask-irc-handlers"
+  - "cabal sandbox init --sandbox=../.cabal-sandbox"
+  - "cabal sandbox add-source ../hask-irc-core/"
+  - "cd ../hask-irc-runner"
+  - "cabal sandbox init --sandbox=../.cabal-sandbox"
+  - "cabal sandbox add-source ../hask-irc-core/"
+  - "cabal sandbox add-source ../hask-irc-handlers/"
 notifications:
   email: true
   irc:
-    - "irc.immortal-anime.net#animestan"
+    - "irc.immortal-anime.net#animestan-hell"
 
