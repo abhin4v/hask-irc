@@ -32,7 +32,7 @@ getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do
   logFileDir <- C.require config "messagelogger.logdir"
   createDirectoryIfMissing True logFileDir
-  return $ logFileDir </> unpack (channel ++ "-" ++ botNick) <.> "log"
+  return $ logFileDir </> unpack (channel ++ "-" ++ nickToText botNick) <.> "log"
 
 openLogFile :: FilePath -> IO Handle
 openLogFile logFilePath = do
@@ -74,16 +74,18 @@ withLogFile action state = do
 
 messageLogger :: MonadMsgHandler m => Message -> IORef LoggerState -> m (Maybe Command)
 messageLogger Message { .. } = case msgDetails of
-  ChannelMsg { .. } -> log "<{}> {}"                  [userNick user, msg]
-  ActionMsg { .. }  -> log "<{}> {} {}"               [userNick user, userNick user, msg]
-  KickMsg { .. }    -> log "** {} KICKED {} :{}"      [userNick user, kickedNick, msg]
-  JoinMsg { .. }    -> log "** {} JOINED"             [userNick user]
-  PartMsg { .. }    -> log "** {} PARTED :{}"         [userNick user, msg]
-  QuitMsg { .. }    -> log "** {} QUIT :{}"           [userNick user, msg]
-  NickMsg { .. }    -> log "** {} CHANGED NICK TO {}" [userNick user, newNick]
-  NamesMsg { .. }   -> log "** USERS {}"              [unwords nicks]
+  ChannelMsg { .. } -> log "<{}> {}"                  [nick user, msg]
+  ActionMsg { .. }  -> log "<{}> {} {}"               [nick user, nick user, msg]
+  KickMsg { .. }    -> log "** {} KICKED {} :{}"      [nick user, nickToText kickedNick, msg]
+  JoinMsg { .. }    -> log "** {} JOINED"             [nick user]
+  PartMsg { .. }    -> log "** {} PARTED :{}"         [nick user, msg]
+  QuitMsg { .. }    -> log "** {} QUIT :{}"           [nick user, msg]
+  NickMsg { .. }    -> log "** {} CHANGED NICK TO {}" [nick user, nickToText newNick]
+  NamesMsg { .. }   -> log "** USERS {}"              [unwords . map nickToText $ nicks]
   _                 -> const $ return Nothing
   where
+    nick = nickToText . userNick
+
     log format args = withLogFile $ \logFile ->
       TF.hprint logFile ("[{}] " ++ format ++ "\n") $ TF.buildParams (fmtTime msgTime : args)
 

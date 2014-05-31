@@ -23,4 +23,5 @@ data AuthEvent = AuthEvent Nick Token (MVar Bool) deriving (Typeable)
 instance Event AuthEvent
 
 instance Show AuthEvent where
-  show (AuthEvent user token _) = "AuthEvent[" ++ unpack user ++ ", " ++ unpack token ++ "]"
+  show (AuthEvent nick token _) =
+    "AuthEvent[" ++ unpack (nickToText nick) ++ ", " ++ unpack token ++ "]"

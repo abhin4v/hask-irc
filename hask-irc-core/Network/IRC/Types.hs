@@ -1,10 +1,12 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Network.IRC.Types
-  ( Nick
+  ( Nick (..)
   , MsgHandlerName
   , User (..)
   , Message (..)
@@ -33,14 +35,21 @@ import Control.Monad.Base      (MonadBase)
 import Control.Monad.Reader    (ReaderT, MonadReader, runReaderT)
 import Control.Monad.State     (StateT, MonadState, execStateT)
 import Data.Configurator.Types (Config)
+import Data.Data               (Data)
+import Data.SafeCopy           (base, deriveSafeCopy)
 import Data.Typeable           (cast)
 
 import Network.IRC.Util
 
 -- IRC related
 
-type Nick           = Text
-type MsgHandlerName = Text
+newtype Nick = Nick { nickToText :: Text }
+               deriving (Eq, Ord, Data, Typeable, Hashable)
+
+instance Show Nick where
+  show = unpack . nickToText
+
+$(deriveSafeCopy 0 'base ''Nick)
 
 data User = Self | User { userNick :: !Nick, userServer :: !Text }
             deriving (Show, Eq)
@@ -104,10 +113,12 @@ data EventResponse =  RespNothing
 
 -- Bot
 
+type MsgHandlerName = Text
+
 data BotConfig = BotConfig { server         :: !Text
                            , port           :: !Int
                            , channel        :: !Text
-                           , botNick        :: !Text
+                           , botNick        :: !Nick
                            , botTimeout     :: !Int
                            , msgHandlerInfo :: !(Map MsgHandlerName (Map Text Text))
                            , config         :: !Config }

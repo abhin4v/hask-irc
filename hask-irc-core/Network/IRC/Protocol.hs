@@ -49,11 +49,11 @@ lineParser BotConfig { .. } time line msgParts = flip Done msgParts . Message ti
     "JOIN"    -> JoinMsg user
     "QUIT"    -> QuitMsg user quitMessage
     "PART"    -> PartMsg user message
-    "KICK"    -> KickMsg user kicked kickReason
-    "MODE"    -> if source == botNick
+    "KICK"    -> KickMsg user (Nick kicked) kickReason
+    "MODE"    -> if Nick source == botNick
                    then ModeMsg Self target message []
                    else ModeMsg user target mode modeArgs
-    "NICK"    -> NickMsg user (drop 1 target)
+    "NICK"    -> NickMsg user $ Nick (drop 1 target)
     "433"     -> NickInUseMsg
     "PRIVMSG" | target /= channel -> PrivMsg user message
               | isActionMsg       -> ActionMsg user (initDef . drop 8 $ message)
@@ -66,7 +66,7 @@ lineParser BotConfig { .. } time line msgParts = flip Done msgParts . Message ti
     target          = splits !! 2
     message         = strip . drop 1 . unwords . drop 3 $ splits
     quitMessage     = strip . drop 1 . unwords . drop 2 $ splits
-    user            = uncurry User . second (drop 1) . break (== '!') $ source
+    user            = uncurry User . (Nick *** drop 1) . break (== '!') $ source
     mode            = splits !! 3
     modeArgs        = drop 4 splits
     kicked          = splits !! 3
@@ -89,17 +89,18 @@ namesParser BotConfig { .. } time line msgParts = case command of
   where
     (_ : command : target : _) = words line
     stripNickPrefix  = pack . dropWhile (`elem` ("~&@%+" :: String)) . unpack
-    namesNicks line' = map stripNickPrefix . words . drop 1 . unwords . drop 5 . words $ line'
+    namesNicks line' =
+      map (Nick . stripNickPrefix) . words . drop 1 . unwords . drop 5 . words $ line'
 
 lineFromCommand :: BotConfig -> Command -> Maybe Text
 lineFromCommand BotConfig { .. } command = case command of
   PongCmd { .. }                  -> Just $ "PONG :" ++ rmsg
   PingCmd { .. }                  -> Just $ "PING :" ++ rmsg
-  NickCmd                         -> Just $ "NICK " ++ botNick
-  UserCmd                         -> Just $ "USER " ++ botNick ++ " 0 * :" ++ botNick
+  NickCmd                         -> Just $ "NICK " ++ nickToText botNick
+  UserCmd                         -> Just $ "USER " ++ nickToText botNick ++ " 0 * :" ++ nickToText botNick
   JoinCmd                         -> Just $ "JOIN " ++ channel
   QuitCmd                         -> Just "QUIT"
   ChannelMsgReply { .. }          -> Just $ "PRIVMSG " ++ channel ++ " :" ++ rmsg
-  PrivMsgReply (User { .. }) rmsg -> Just $ "PRIVMSG " ++ userNick ++ " :" ++ rmsg
+  PrivMsgReply (User { .. }) rmsg -> Just $ "PRIVMSG " ++ nickToText userNick ++ " :" ++ rmsg
   NamesCmd                        -> Just $ "NAMES " ++ channel
   _                               -> Nothing

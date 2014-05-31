@@ -14,7 +14,8 @@ mkMsgHandler _ _ _          = return Nothing
 
 greeter ::  MonadMsgHandler m => Message -> m (Maybe Command)
 greeter Message { msgDetails = ChannelMsg { .. }, .. } =
-  return . map (ChannelMsgReply . (++ userNick user) . (++ " ")) . find (== clean msg) $ greetings
+  return . map (ChannelMsgReply . (++ nickToText (userNick user)) . (++ " "))
+    . find (== clean msg) $ greetings
   where
     greetings = [ "hi", "hello", "hey", "sup", "bye"
                 , "good morning", "good evening", "good night" ]
@@ -24,7 +25,7 @@ welcomer :: MonadMsgHandler m => Message -> m (Maybe Command)
 welcomer Message { msgDetails = JoinMsg { .. }, .. } = do
   BotConfig { .. } <- ask
   if userNick user /= botNick
-    then return . Just . ChannelMsgReply $ "welcome back " ++ userNick user
+    then return . Just . ChannelMsgReply $ "welcome back " ++ nickToText (userNick user)
     else return Nothing
 
 welcomer _ = return Nothing

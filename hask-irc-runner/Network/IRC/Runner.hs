@@ -57,13 +57,13 @@ loadBotConfig configFile = do
       eBotConfig <- try $ do
         handlers :: [Text] <- CF.require cfg "msghandlers"
         let handlerInfo = foldl' (\m h -> insertMap h mempty m) mempty handlers
-        BotConfig                  <$>
-          CF.require cfg "server"  <*>
-          CF.require cfg "port"    <*>
-          CF.require cfg "channel" <*>
-          CF.require cfg "nick"    <*>
-          CF.require cfg "timeout" <*>
-          pure handlerInfo         <*>
+        BotConfig                          <$>
+          CF.require cfg "server"          <*>
+          CF.require cfg "port"            <*>
+          CF.require cfg "channel"         <*>
+          (Nick <$> CF.require cfg "nick") <*>
+          CF.require cfg "timeout"         <*>
+          pure handlerInfo                 <*>
           pure cfg
 
       case eBotConfig of

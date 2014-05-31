@@ -74,5 +74,5 @@ mkMsgHandler BotConfig { .. } _ "auth" = do
                                 , onStop    = stopAuth state
                                 , onHelp    = return $ singletonMap "token" helpMsg }
   where
-    helpMsg = "Send a PM to get a new auth token. /msg " ++ botNick ++ " token"
+    helpMsg = "Send a PM to get a new auth token. /msg " ++ nickToText botNick ++ " token"
 mkMsgHandler _ _ _                     = return Nothing

@@ -20,8 +20,10 @@ import Data.IxSet                (getOne, (@=))
 import Data.Time                 (addUTCTime, NominalDiffTime)
 
 import Network.IRC.Handlers.NickTracker.Types
-import Network.IRC.Types hiding (Nick)
+import Network.IRC.Types
 import Network.IRC.Util
+
+-- database
 
 getByNickQ :: Nick -> Query NickTracking (Maybe NickTrack)
 getByNickQ nick = do
@@ -40,11 +42,13 @@ saveNickTrackQ nt = do
 
 $(makeAcidic ''NickTracking ['getByNickQ, 'getByCanonicalNickQ, 'saveNickTrackQ])
 
-getByNick :: AcidState NickTracking -> Text -> IO (Maybe NickTrack)
-getByNick acid = query acid . GetByNickQ . Nick
+getByNick :: AcidState NickTracking -> Nick -> IO (Maybe NickTrack)
+getByNick acid = query acid . GetByNickQ
 
 saveNickTrack :: AcidState NickTracking -> NickTrack -> IO ()
 saveNickTrack acid = update acid . SaveNickTrackQ
+
+-- handler
 
 data NickTrackingState = NickTrackingState { acid            :: AcidState NickTracking
                                            , refreshInterval :: NominalDiffTime
@@ -73,14 +77,14 @@ nickTrackerMsg state message@Message { .. } = case msgDetails of
     updateRefreshTime = atomicModIORef state $ \ s -> s { lastRefreshOn = msgTime }
 
     modifyOnlineNicks f = atomicModIORef state $ \s -> s { onlineNicks = f . onlineNicks $ s }
-    add        = modifyOnlineNicks . flip ((. (Nick . userNick)) . flip insertSet)
-    remove     = modifyOnlineNicks . flip ((. (Nick . userNick)) . flip deleteSet)
+    add        = modifyOnlineNicks . flip ((. userNick) . flip insertSet)
+    remove     = modifyOnlineNicks . flip ((. userNick) . flip deleteSet)
     swap users = modifyOnlineNicks $
-      let (oNick, nNick) = both (Nick . userNick) users
+      let (oNick, nNick) = both userNick users
       in deleteSet oNick . insertSet nNick
-    refresh    = modifyOnlineNicks . const . setFromList . map Nick
+    refresh    = modifyOnlineNicks . const . setFromList
 
-    commands = [ ("!nick",        handleNickCommand)
+    commands = [ ("!nicks",       handleNickCommand)
                , ("!seen",        handleSeenCommand)
                , ("!forgetnicks", handleForgetNicksCommand)]
 
@@ -98,9 +102,9 @@ updateNickTrack state user message msgTime = io $ do
     (_, Just (NickTrack { .. }))  -> return (message, msgTime, canonicalNick)
     _                             -> newCanonicalNick >>= \cn -> return (message, msgTime, cn)
 
-  saveNickTrack acid $ NickTrack (Nick nck) cn (LastSeenOn msgTime) lastMessageOn' message'
+  saveNickTrack acid $ NickTrack nck cn (LastSeenOn msgTime) lastMessageOn' message'
 
-handleNickChange :: MonadMsgHandler m => IORef NickTrackingState -> User -> Text -> UTCTime -> m ()
+handleNickChange :: MonadMsgHandler m => IORef NickTrackingState -> User -> Nick -> UTCTime -> m ()
 handleNickChange state user newNick msgTime = io $ do
   NickTrackingState { .. } <- readIORef state
   let prevNick = userNick user
@@ -116,7 +120,7 @@ handleNickChange state user newNick msgTime = io $ do
     _ -> return Nothing
 
   whenJust mInfo $ \(message, cn, lastMessageOn') ->
-    saveNickTrack acid $ NickTrack (Nick newNick) cn (LastSeenOn msgTime) lastMessageOn' message
+    saveNickTrack acid $ NickTrack newNick cn (LastSeenOn msgTime) lastMessageOn' message
 
 newCanonicalNick :: IO CanonicalNick
 newCanonicalNick = map (CanonicalNick . pack . U.toString) U.nextRandom
@@ -130,7 +134,7 @@ withNickTracks f state message = io $ do
   if nick == ""
     then return Nothing
     else do
-      mcn <- liftM (map canonicalNick) . getByNick acid $ nick
+      mcn <- liftM (map canonicalNick) . getByNick acid . Nick $ nick
       map (Just . ChannelMsgReply) $ case mcn of
         Nothing -> return $ "Unknown nick: " ++ nick
         Just cn -> io $ query acid (GetByCanonicalNickQ cn) >>= \nts -> f nick nts onlineNicks
@@ -168,7 +172,7 @@ handleForgetNicksCommand state Message { msgDetails = ~ChannelMsg { .. }, .. } =
     Just nt <- getByNick acid nick
     cn      <- newCanonicalNick
     saveNickTrack acid $ nt { canonicalNick = cn }
-  return . Just . ChannelMsgReply $ "Forgot all alternate nicks of " ++ nick
+  return . Just . ChannelMsgReply $ "Forgot all alternate nicks of " ++ nickToText nick
 
 stopNickTracker :: MonadMsgHandler m => IORef NickTrackingState -> m ()
 stopNickTracker state = io $ do
@@ -188,6 +192,7 @@ mkMsgHandler BotConfig { .. } _ "nicktracker" = do
                                 , onHelp    = return helpMsgs }
   where
     helpMsgs = mapFromList [
-      ("!nick", "Shows the user's other nicks. !nick <user nick>"),
-      ("!seen", "Lets you know when a user was last seen online and last spoke in the channel. !seen <user nick>") ]
+      ("!nicks", "Shows alternate nicks of the user. !nicks <user nick>"),
+      ("!seen", "Lets you know when a user was last seen online and last spoke in the channel. !seen <user nick>"),
+      ("!forgetnicks", "Forgets all your alternate nicks. !forgetnicks") ]
 mkMsgHandler _ _ _                            = return Nothing
