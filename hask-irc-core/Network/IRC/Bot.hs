@@ -115,7 +115,7 @@ messageProcessLoop = messageProcessLoop' 0
             mLine <- readLine lineChan
             case mLine of
               Timeout      ->
-                getCurrentTime >>= \t -> dispatchHandlers bot (Message t "" IdleMsg)  >> return Idle
+                getCurrentTime >>= \t -> dispatchHandlers bot (Message t "" IdleMsg) >> return Idle
               EOF          -> infoM "Connection closed" >> return Disconnected
               Line _ _     -> error "This should never happen"
               Msg (message@Message { .. }) -> do
