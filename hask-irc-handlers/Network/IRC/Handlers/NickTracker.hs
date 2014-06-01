@@ -8,16 +8,15 @@ import qualified Data.IxSet        as IS
 import qualified Data.UUID         as U
 import qualified Data.UUID.V4      as U
 
-import ClassyPrelude hiding      (swap)
-import Control.Concurrent.Lifted (Chan)
-import Control.Monad.Reader      (ask)
-import Control.Monad.State       (get, put)
-import Data.Acid                 (AcidState, Query, Update, makeAcidic, query, update,
-                                  openLocalState, createArchive)
-import Data.Acid.Local           (createCheckpointAndClose)
-import Data.Convertible          (convert)
-import Data.IxSet                (getOne, (@=))
-import Data.Time                 (addUTCTime, NominalDiffTime)
+import ClassyPrelude hiding (swap)
+import Control.Monad.Reader (ask)
+import Control.Monad.State  (get, put)
+import Data.Acid            (AcidState, Query, Update, makeAcidic, query, update,
+                             openLocalState, createArchive)
+import Data.Acid.Local      (createCheckpointAndClose)
+import Data.Convertible     (convert)
+import Data.IxSet           (getOne, (@=))
+import Data.Time            (addUTCTime, NominalDiffTime)
 
 import Network.IRC.Handlers.NickTracker.Types
 import Network.IRC.Types
@@ -187,7 +186,7 @@ stopNickTracker state = io $ do
   createArchive acid
   createCheckpointAndClose acid
 
-mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler :: MsgHandlerMaker
 mkMsgHandler BotConfig { .. } _ "nicktracker" = do
   state <- io $ do
     now             <- getCurrentTime

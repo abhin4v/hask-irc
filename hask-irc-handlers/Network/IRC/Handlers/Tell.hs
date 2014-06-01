@@ -21,6 +21,8 @@ import Network.IRC.Handlers.Tell.Types
 import Network.IRC.Types
 import Network.IRC.Util
 
+-- database
+
 getUndeliveredTellsQ :: CanonicalNick -> Query Tells [Tell]
 getUndeliveredTellsQ nick = do
   Tells { .. } <- ask
@@ -41,6 +43,8 @@ getUndeliveredTells acid = query acid . GetUndeliveredTellsQ
 saveTell :: AcidState Tells -> Tell -> IO ()
 saveTell acid = update acid . SaveTellQ
 
+-- handler
+
 newtype TellState = TellState { acid :: AcidState Tells }
 
 tellMsg :: MonadMsgHandler m => Chan SomeEvent -> IORef TellState -> Message ->  m [Command]
@@ -50,10 +54,9 @@ tellMsg eventChan state Message { msgDetails = ChannelMsg { .. }, .. }
   , length args >= 2             = io $ do
       TellState { .. } <- readIORef state
       reps <- if "<" `isPrefixOf` headEx args
-        then do
+        then do -- multi tell
           let (nicks, message) =
                 (parseNicks *** (strip . drop 1)) . break (== '>') . drop 1 . unwords $ args
-
           if null message
             then return []
             else do
@@ -63,7 +66,7 @@ tellMsg eventChan state Message { msgDetails = ChannelMsg { .. }, .. }
                            (if null passes then [] else
                               ["Message noted and will be passed on to " ++ intercalate ", " passes])
               return reps
-        else do
+        else do -- single tell
           let nick = Nick . headEx $ args
           let message = strip . unwords . drop 1 $ args
           if null message
@@ -91,7 +94,7 @@ tellMsg eventChan state Message { msgDetails = ChannelMsg { .. }, .. }
 
     getTellsToDeliver = io $ do
       TellState { .. } <- readIORef state
-      mcn <- getCanonicalNick eventChan $ userNick user
+      mcn              <- getCanonicalNick eventChan $ userNick user
       case mcn of
         Nothing            -> return []
         Just canonicalNick -> do
@@ -109,21 +112,29 @@ tellMsg eventChan state Message { msgDetails = ChannelMsg { .. }, .. }
 
 tellMsg _ _ _ = return []
 
+tellEvent :: MonadMsgHandler m => Chan SomeEvent -> IORef TellState -> SomeEvent -> m EventResponse
+tellEvent eventChan state event = case fromEvent event of
+  Just (TellRequest user message, evTime) -> do
+    tellMsg eventChan state . Message evTime "" $ ChannelMsg user message
+    return RespNothing
+  _                                       -> return RespNothing
+
 stopTell :: MonadMsgHandler m => IORef TellState -> m ()
 stopTell state = io $ do
   TellState { .. } <- readIORef state
   createArchive acid
   createCheckpointAndClose acid
 
-mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler :: MsgHandlerMaker
 mkMsgHandler BotConfig { .. } eventChan "tells" = do
-  acid <- openLocalState emptyTells
+  acid  <- openLocalState emptyTells
   state <- newIORef (TellState acid)
   return . Just $ newMsgHandler { onMessage = tellMsg eventChan state
+                                , onEvent   = tellEvent eventChan state
                                 , onStop    = stopTell state
                                 , onHelp    = return helpMsgs }
   where
     helpMsgs = mapFromList [
       ("!tell", "Publically passes a message to a user or a bunch of users. " ++
-                "!tell <nick> <message> or !tell <<nick1> <nick2> ...> <message>") ]
+                "!tell <nick> <message> or !tell <<nick1> <nick2> ...> <message>.") ]
 mkMsgHandler _ _ _                            = return Nothing

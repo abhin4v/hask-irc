@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Network.IRC.Handlers.Auth.Types where
@@ -18,7 +17,7 @@ emptyAuth = Auth mempty
 
 $(deriveSafeCopy 0 'base ''Auth)
 
-data AuthEvent = AuthEvent Nick Token (MVar Bool) deriving (Typeable)
+data AuthEvent = AuthEvent Nick Token (MVar Bool) deriving (Eq, Typeable)
 
 instance Event AuthEvent
 

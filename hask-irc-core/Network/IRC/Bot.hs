@@ -17,7 +17,7 @@ import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
 import Control.Concurrent.Lifted (fork, Chan, readChan, writeChan, threadDelay)
-import Control.Exception.Lifted  (mask_)
+import Control.Exception.Lifted  (mask_, mask)
 import Control.Monad.Reader      (ask)
 import Control.Monad.State       (get, put)
 import Data.Time                 (addUTCTime)
@@ -59,11 +59,11 @@ sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
       _       -> sendCommandLoop (commandChan, latch) bot
 
 readLineLoop :: MVar BotStatus -> Channel Line -> Bot -> Int -> IO ()
-readLineLoop = readLineLoop' []
+readLineLoop = go []
   where
     msgPartTimeout = 10
 
-    readLineLoop' !msgParts mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
+    go !msgParts mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
       botStatus <- readMVar mvBotStatus
       case botStatus of
         Disconnected -> latchIt latch
@@ -76,31 +76,30 @@ readLineLoop = readLineLoop' []
             Right Nothing                 -> writeChan lineChan Timeout >> return msgParts
             Right (Just (Line time line)) -> do
               let (mmsg, msgParts') = parseLine botConfig time line msgParts
-              case mmsg of
-                Nothing  -> return msgParts'
-                Just msg -> writeChan lineChan (Msg msg) >> return msgParts'
+              whenJust mmsg $ writeChan lineChan . Msg
+              return msgParts'
             Right (Just l)                -> writeChan lineChan l >> return msgParts
 
           limit <- map (addUTCTime (- msgPartTimeout)) getCurrentTime
           let msgParts'' = concat
                            . filter ((> limit) . msgPartTime . headEx . sortBy (flip $ comparing msgPartTime))
                            . groupAllOn (msgParserType &&& msgPartTarget) $ msgParts'
-          readLineLoop' msgParts'' mvBotStatus (lineChan, latch) bot timeoutDelay
+          go msgParts'' mvBotStatus (lineChan, latch) bot timeoutDelay
       where
         readLine' = do
           eof <- hIsEOF socket
           if eof
             then return EOF
-            else do
-              line <- map initEx $ hGetLine socket
+            else mask $ \unmask -> do
+              line <- map initEx . unmask $ hGetLine socket
               infoM . unpack $ "< " ++ line
               now <- getCurrentTime
               return $ Line now line
 
 messageProcessLoop :: Chan Line -> Chan Command -> IRC ()
-messageProcessLoop = messageProcessLoop' 0
+messageProcessLoop = go 0
   where
-    messageProcessLoop' !idleFor lineChan commandChan = do
+    go !idleFor lineChan commandChan = do
       status         <- get
       bot@Bot { .. } <- ask
       let nick       = botNick botConfig
@@ -133,10 +132,10 @@ messageProcessLoop = messageProcessLoop' 0
 
       put nStatus
       case nStatus of
-        Idle             -> messageProcessLoop' (idleFor + oneSec) lineChan commandChan
+        Idle             -> go (idleFor + oneSec) lineChan commandChan
         Disconnected     -> return ()
         NickNotAvailable -> return ()
-        _                -> messageProcessLoop' 0 lineChan commandChan
+        _                -> go 0 lineChan commandChan
 
       where
         dispatchHandlers Bot { .. } message =

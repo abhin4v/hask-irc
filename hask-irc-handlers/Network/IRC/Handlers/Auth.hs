@@ -7,12 +7,11 @@ import qualified Data.UUID    as U
 import qualified Data.UUID.V4 as U
 
 import ClassyPrelude
-import Control.Concurrent.Lifted (Chan)
-import Control.Monad.Reader      (asks)
-import Control.Monad.State       (get, put)
-import Data.Acid                 (AcidState, Query, Update, makeAcidic, query, update,
-                                  openLocalState, createArchive)
-import Data.Acid.Local           (createCheckpointAndClose)
+import Control.Monad.Reader (asks)
+import Control.Monad.State  (get, put)
+import Data.Acid            (AcidState, Query, Update, makeAcidic, query, update,
+                             openLocalState, createArchive)
+import Data.Acid.Local      (createCheckpointAndClose)
 
 import Network.IRC.Handlers.Auth.Types
 import Network.IRC.Types
@@ -66,7 +65,7 @@ authEvent state event = case fromEvent event of
     return RespNothing
   _                                    -> return RespNothing
 
-mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler :: MsgHandlerMaker
 mkMsgHandler BotConfig { .. } _ "auth" = do
   state <- io $ openLocalState emptyAuth >>= newIORef
   return . Just $ newMsgHandler { onMessage = authMessage state

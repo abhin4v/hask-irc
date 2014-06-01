@@ -2,25 +2,24 @@
 
 module Network.IRC.Handlers.MessageLogger (mkMsgHandler) where
 
-import qualified Data.Configurator       as C
+import qualified Data.Configurator       as CF
 import qualified Data.Text.Format        as TF
 import qualified Data.Text.Format.Params as TF
 
-import ClassyPrelude hiding      ((</>), (<.>), FilePath, log)
-import Control.Concurrent.Lifted (Chan)
-import Control.Exception.Lifted  (mask_)
-import Control.Monad.Reader      (ask)
-import Data.Time                 (diffDays)
-import System.Directory          (createDirectoryIfMissing, getModificationTime, copyFile, removeFile)
-import System.FilePath           (FilePath, (</>), (<.>))
-import System.IO                 (openFile, IOMode(..), hSetBuffering, BufferMode(..))
+import ClassyPrelude hiding     ((</>), (<.>), FilePath, log)
+import Control.Exception.Lifted (mask_)
+import Control.Monad.Reader     (ask)
+import Data.Time                (diffDays)
+import System.Directory         (createDirectoryIfMissing, getModificationTime, copyFile, removeFile)
+import System.FilePath          (FilePath, (</>), (<.>))
+import System.IO                (openFile, IOMode(..), hSetBuffering, BufferMode(..))
 
 import Network.IRC.Types
 import Network.IRC.Util
 
 type LoggerState = Maybe (Handle, Day)
 
-mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler :: MsgHandlerMaker
 mkMsgHandler botConfig _ "messagelogger" = do
   state <- io $ newIORef Nothing
   initMessageLogger botConfig state
@@ -30,7 +29,7 @@ mkMsgHandler _ _ _                       = return Nothing
 
 getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do
-  logFileDir <- C.require config "messagelogger.logdir"
+  logFileDir <- CF.require config "messagelogger.logdir"
   createDirectoryIfMissing True logFileDir
   return $ logFileDir </> unpack (channel ++ "-" ++ nickToText botNick) <.> "log"
 

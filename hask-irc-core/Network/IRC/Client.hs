@@ -5,18 +5,26 @@ module Network.IRC.Client (runBot) where
 import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
-import Control.Concurrent.Lifted (fork, newChan, threadDelay)
-import Control.Exception.Lifted  (AsyncException (UserInterrupt))
+import Control.Concurrent.Lifted (fork, newChan, threadDelay, myThreadId, Chan)
+import Control.Exception.Lifted  (throwTo, AsyncException (UserInterrupt))
 import Network                   (PortID (PortNumber), connectTo, withSocketsDo)
 import System.IO                 (hSetBuffering, BufferMode(..))
+import System.Log.Formatter      (tfLogFormatter)
+import System.Log.Handler        (setFormatter)
+import System.Log.Handler.Simple (streamHandler)
+import System.Log.Logger         (Priority (..), updateGlobalLogger, rootLoggerName,
+                                  setHandlers, setLevel)
 import System.Log.Logger.TH      (deriveLoggers)
+import System.Posix.Signals      (installHandler, sigINT, sigTERM, Handler (Catch))
 
 import Network.IRC.Bot
-import Network.IRC.Handlers
 import Network.IRC.Types
 import Network.IRC.Util
 
 $(deriveLoggers "HSL" [HSL.DEBUG, HSL.ERROR])
+
+coreMsgHandlerNames :: [MsgHandlerName]
+coreMsgHandlerNames = ["pingpong", "help"]
 
 connect :: BotConfig -> IO (Bot, MVar BotStatus, Channel Line, Channel Command, Channel SomeEvent)
 connect botConfig@BotConfig { .. } = do
@@ -43,10 +51,17 @@ connect botConfig@BotConfig { .. } = do
 
     newChannel = (,) <$> newChan <*> newEmptyMVar
 
+    mkMsgHandler :: Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+    mkMsgHandler eventChan name =
+      flip (`foldM` Nothing) msgHandlerMakers $ \finalHandler handler ->
+        case finalHandler of
+          Just _  -> return finalHandler
+          Nothing -> handler botConfig eventChan name
+
     loadMsgHandlers eventChan =
       flip (`foldM` mempty) (mapKeys msgHandlerInfo) $ \hMap msgHandlerName -> do
         debugM . unpack $ "Loading msg handler: " ++ msgHandlerName
-        mMsgHandler <- mkMsgHandler botConfig eventChan msgHandlerName
+        mMsgHandler <- mkMsgHandler eventChan msgHandlerName
         case mMsgHandler of
           Nothing         -> do
             debugM . unpack $ "No msg handler found with name: " ++ msgHandlerName
@@ -71,15 +86,12 @@ disconnect (Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch), (
       debugM . unpack $ "Unloading msg handler: " ++ msgHandlerName
       stopMsgHandler msgHandler botConfig
 
-runBot :: BotConfig -> IO ()
-runBot botConfig' = withSocketsDo $ do
-  hSetBuffering stdout LineBuffering
-  debugM "Running with config:"
-  print botConfig
-  status <- runBot_
+runBotIntenal :: BotConfig -> IO ()
+runBotIntenal botConfig' = withSocketsDo $ do
+  status <- run
   case status of
-    Disconnected     -> debugM "Restarting .." >> runBot botConfig
-    Errored          -> debugM "Restarting .." >> runBot botConfig
+    Disconnected     -> debugM "Restarting .." >> runBotIntenal botConfig
+    Errored          -> debugM "Restarting .." >> runBotIntenal botConfig
     Interrupted      -> return ()
     NickNotAvailable -> return ()
     _                -> error "Unsupported status"
@@ -95,9 +107,11 @@ runBot botConfig' = withSocketsDo $ do
         Just UserInterrupt -> debugM "User interrupt"          >> return Interrupted
         _                  -> debugM ("Exception! " ++ show e) >> return Errored
 
-    runBot_ = bracket (connect botConfig) disconnect $
+    run = bracket (connect botConfig) disconnect $
       \(bot, mvBotStatus, (lineChan, readLatch), (commandChan, sendLatch), eventChannel) ->
         handle handleErrors $ do
+          debugM $ "Running with config:\n" ++ show botConfig
+
           sendCommand commandChan NickCmd
           sendCommand commandChan UserCmd
 
@@ -105,3 +119,20 @@ runBot botConfig' = withSocketsDo $ do
           fork $ readLineLoop mvBotStatus (lineChan, readLatch) bot oneSec
           fork $ eventProcessLoop eventChannel lineChan commandChan bot
           runIRC bot Connected (messageProcessLoop lineChan commandChan)
+
+runBot :: BotConfig -> IO ()
+runBot botConfig = do
+  -- setup signal handling
+  mainThreadId <- myThreadId
+  installHandler sigINT  (Catch $ throwTo mainThreadId UserInterrupt) Nothing
+  installHandler sigTERM (Catch $ throwTo mainThreadId UserInterrupt) Nothing
+
+  -- setup logging
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
+  stderrHandler <- streamHandler stderr DEBUG >>= \lh -> return $
+                     setFormatter lh $ tfLogFormatter "%F %T" "[$utcTime] $loggername $prio $msg"
+  updateGlobalLogger rootLoggerName (setHandlers [stderrHandler] . setLevel DEBUG)
+
+  -- run
+  runBotIntenal botConfig

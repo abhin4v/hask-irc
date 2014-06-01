@@ -10,7 +10,8 @@ import Data.SafeCopy             (base, deriveSafeCopy)
 
 import Network.IRC.Types
 
-newtype CanonicalNick = CanonicalNick Text deriving (Eq, Ord, Show, Data, Typeable)
+newtype CanonicalNick = CanonicalNick { canonicalNickToText :: Text }
+                        deriving (Eq, Ord, Show, Data, Typeable)
 newtype LastSeenOn    = LastSeenOn UTCTime deriving (Eq, Ord, Show, Data, Typeable)
 
 data NickTrack = NickTrack {
@@ -37,7 +38,7 @@ $(deriveSafeCopy 0 'base ''NickTracking)
 emptyNickTracking :: NickTracking
 emptyNickTracking = NickTracking empty
 
-data NickTrackRequest = NickTrackRequest Nick (MVar (Maybe NickTrack)) deriving (Typeable)
+data NickTrackRequest = NickTrackRequest Nick (MVar (Maybe NickTrack)) deriving (Eq, Typeable)
 
 instance Event NickTrackRequest
 
@@ -46,7 +47,7 @@ instance Show NickTrackRequest where
 
 getCanonicalNick :: Chan SomeEvent -> Nick -> IO (Maybe CanonicalNick)
 getCanonicalNick eventChan nick = do
-  reply <- newEmptyMVar
+  reply   <- newEmptyMVar
   request <- toEvent $ NickTrackRequest nick reply
   writeChan eventChan request
   map (map canonicalNick) $ takeMVar reply

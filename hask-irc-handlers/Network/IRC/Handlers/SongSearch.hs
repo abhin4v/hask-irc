@@ -7,21 +7,20 @@ import qualified Data.Configurator as CF
 import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
-import Control.Concurrent.Lifted (Chan)
-import Control.Exception.Lifted  (evaluate)
-import Control.Monad.Reader      (ask)
-import Data.Aeson                (FromJSON, parseJSON, Value (..), (.:))
-import Data.Aeson.Types          (emptyArray)
-import Data.Text                 (strip)
-import Network.Curl.Aeson        (curlAesonGet, CurlAesonException)
-import Network.HTTP.Base         (urlEncode)
-import System.Log.Logger.TH      (deriveLoggers)
+import Control.Exception.Lifted (evaluate)
+import Control.Monad.Reader     (ask)
+import Data.Aeson               (FromJSON, parseJSON, Value (..), (.:))
+import Data.Aeson.Types         (emptyArray)
+import Data.Text                (strip)
+import Network.Curl.Aeson       (curlAesonGet, CurlAesonException)
+import Network.HTTP.Base        (urlEncode)
+import System.Log.Logger.TH     (deriveLoggers)
 
 import Network.IRC.Types
 
 $(deriveLoggers "HSL" [HSL.ERROR])
 
-mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler :: MsgHandlerMaker
 mkMsgHandler _ _ "songsearch" =
   return . Just $ newMsgHandler { onMessage = songSearch,
                                   onHelp    = return $ singletonMap "!m" helpMsg }

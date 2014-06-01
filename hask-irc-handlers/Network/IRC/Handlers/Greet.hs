@@ -1,13 +1,12 @@
 module Network.IRC.Handlers.Greet (mkMsgHandler) where
 
 import ClassyPrelude
-import Control.Concurrent.Lifted  (Chan)
-import Control.Monad.Reader       (ask)
+import Control.Monad.Reader (ask)
 
 import Network.IRC.Types
 import Network.IRC.Util
 
-mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler :: MsgHandlerMaker
 mkMsgHandler _ _ "greeter"  = return . Just $ newMsgHandler { onMessage = greeter }
 mkMsgHandler _ _ "welcomer" = return . Just $ newMsgHandler { onMessage = welcomer }
 mkMsgHandler _ _ _          = return Nothing

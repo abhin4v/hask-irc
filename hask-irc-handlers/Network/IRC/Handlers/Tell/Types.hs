@@ -1,13 +1,13 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Network.IRC.Handlers.Tell.Types where
 
 import ClassyPrelude
-import Data.Data      (Data)
-import Data.IxSet     (IxSet, Indexable (..), ixSet, ixFun)
-import Data.SafeCopy  (base, deriveSafeCopy)
+import Control.Concurrent.Lifted (Chan, writeChan)
+import Data.Data                 (Data)
+import Data.IxSet                (IxSet, Indexable (..), ixSet, ixFun)
+import Data.SafeCopy             (base, deriveSafeCopy)
 
 import Network.IRC.Handlers.NickTracker.Types
 import Network.IRC.Types
@@ -41,3 +41,14 @@ $(deriveSafeCopy 0 'base ''Tells)
 
 emptyTells :: Tells
 emptyTells = Tells (TellId 1) empty
+
+data TellRequest = TellRequest User Text deriving (Eq, Typeable)
+
+instance Event TellRequest
+
+instance Show TellRequest where
+  show (TellRequest user tell) =
+    "TellRequest[" ++ unpack (nickToText (userNick user) ++ ": " ++ tell) ++ "]"
+
+sendTell :: Chan SomeEvent -> User -> Text -> IO ()
+sendTell eventChan user tell = toEvent (TellRequest user tell) >>= writeChan eventChan

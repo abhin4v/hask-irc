@@ -27,17 +27,19 @@ module Network.IRC.Types
   , handleMessage
   , handleEvent
   , stopMsgHandler
-  , getHelp )
+  , getHelp
+  , MsgHandlerMaker )
 where
 
 import ClassyPrelude
-import Control.Monad.Base      (MonadBase)
-import Control.Monad.Reader    (ReaderT, MonadReader, runReaderT)
-import Control.Monad.State     (StateT, MonadState, execStateT)
-import Data.Configurator.Types (Config)
-import Data.Data               (Data)
-import Data.SafeCopy           (base, deriveSafeCopy)
-import Data.Typeable           (cast)
+import Control.Concurrent.Lifted (Chan)
+import Control.Monad.Base        (MonadBase)
+import Control.Monad.Reader      (ReaderT, MonadReader, runReaderT)
+import Control.Monad.State       (StateT, MonadState, execStateT)
+import Data.Configurator.Types   (Config)
+import Data.Data                 (Data)
+import Data.SafeCopy             (base, deriveSafeCopy)
+import Data.Typeable             (cast)
 
 import Network.IRC.Util
 
@@ -52,10 +54,10 @@ instance Show Nick where
 $(deriveSafeCopy 0 'base ''Nick)
 
 data User = Self | User { userNick :: !Nick, userServer :: !Text }
-            deriving (Show, Eq)
+            deriving (Show, Eq, Ord)
 
 data Message = Message { msgTime :: !UTCTime, msgLine :: !Text, msgDetails :: MessageDetails}
-               deriving (Show, Eq)
+               deriving (Show, Eq, Ord)
 
 data MessageDetails =
     IdleMsg
@@ -73,7 +75,7 @@ data MessageDetails =
   | KickMsg      { user      :: !User, kickedNick :: !Nick, msg       :: !Text }
   | ModeMsg      { user      :: !User, msgTarget  :: !Text, mode      :: !Text , modeArgs :: ![Text] }
   | OtherMsg     { msgSource :: !Text, msgCommand :: !Text, msgTarget :: !Text , msg      :: !Text }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 data Command =
     PingCmd         { rmsg  :: !Text }
@@ -85,11 +87,11 @@ data Command =
   | JoinCmd
   | QuitCmd
   | NamesCmd
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
--- Internal events
+-- Events
 
-class (Typeable e, Show e) => Event e where
+class (Typeable e, Show e, Eq e) => Event e where
   toEvent :: e -> IO SomeEvent
   toEvent e = SomeEvent <$> pure e <*> getCurrentTime
 
@@ -98,30 +100,36 @@ class (Typeable e, Show e) => Event e where
     ev <- cast e
     return (ev, time)
 
-data SomeEvent = forall e. Event e => SomeEvent e UTCTime deriving (Typeable)
+data SomeEvent = forall e. (Event e, Typeable e) => SomeEvent e UTCTime deriving (Typeable)
 instance Show SomeEvent where
   show (SomeEvent e time) = formatTime defaultTimeLocale "[%F %T] " time ++ show e
+instance Eq SomeEvent where
+  SomeEvent e1 t1 == SomeEvent e2 t2 =
+    case cast e2 of
+      Just e2' -> e1 == e2' && t1 == t2
+      Nothing  -> False
 
-data QuitEvent = QuitEvent deriving (Show, Typeable)
+data QuitEvent = QuitEvent deriving (Show, Eq, Ord, Typeable)
 instance Event QuitEvent
 
 data EventResponse =  RespNothing
                     | RespEvent SomeEvent
                     | RespMessage Message
                     | RespCommand Command
-                    deriving (Show)
+                    deriving (Show, Eq)
 
 -- Bot
 
 type MsgHandlerName = Text
 
-data BotConfig = BotConfig { server         :: !Text
-                           , port           :: !Int
-                           , channel        :: !Text
-                           , botNick        :: !Nick
-                           , botTimeout     :: !Int
-                           , msgHandlerInfo :: !(Map MsgHandlerName (Map Text Text))
-                           , config         :: !Config }
+data BotConfig = BotConfig { server           :: !Text
+                           , port             :: !Int
+                           , channel          :: !Text
+                           , botNick          :: !Nick
+                           , botTimeout       :: !Int
+                           , msgHandlerInfo   :: !(Map MsgHandlerName (Map Text Text))
+                           , msgHandlerMakers :: ![MsgHandlerMaker]
+                           , config           :: !Config }
 
 instance Show BotConfig where
   show BotConfig { .. } = "server = "   ++ show server     ++ "\n" ++
@@ -135,15 +143,15 @@ data Bot = Bot { botConfig   :: !BotConfig
                , socket      :: !Handle
                , msgHandlers :: !(Map MsgHandlerName MsgHandler) }
 
-data BotStatus = Connected
-               | Disconnected
-               | Joined
-               | Kicked
-               | Errored
-               | Idle
-               | Interrupted
-               | NickNotAvailable
-               deriving (Show, Eq)
+data BotStatus =  Connected
+                | Disconnected
+                | Joined
+                | Kicked
+                | Errored
+                | Idle
+                | Interrupted
+                | NickNotAvailable
+                deriving (Show, Eq, Ord)
 
 newtype IRC a = IRC { _runIRC :: StateT BotStatus (ReaderT Bot IO) a }
                 deriving ( Functor
@@ -202,3 +210,5 @@ newMsgHandler = MsgHandler {
   onEvent   = const $ return RespNothing,
   onHelp    = return mempty
 }
+
+type MsgHandlerMaker = BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)

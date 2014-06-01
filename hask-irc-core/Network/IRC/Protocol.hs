@@ -60,18 +60,18 @@ lineParser BotConfig { .. } time line msgParts = flip Done msgParts . Message ti
               | otherwise         -> ChannelMsg user message
     _         -> OtherMsg source command target message
   where
-    splits          = words line
-    command         = splits !! 1
-    source          = drop 1 $ splits !! 0
-    target          = splits !! 2
-    message         = strip . drop 1 . unwords . drop 3 $ splits
-    quitMessage     = strip . drop 1 . unwords . drop 2 $ splits
-    user            = uncurry User . (Nick *** drop 1) . break (== '!') $ source
-    mode            = splits !! 3
-    modeArgs        = drop 4 splits
-    kicked          = splits !! 3
-    kickReason      = drop 1 . unwords . drop 4 $ splits
-    isActionMsg     = "\SOH" `isPrefixOf` message && "ACTION" `isPrefixOf` drop 1 message
+    splits      = words line
+    command     = splits !! 1
+    source      = drop 1 $ splits !! 0
+    target      = splits !! 2
+    message     = strip . drop 1 . unwords . drop 3 $ splits
+    quitMessage = strip . drop 1 . unwords . drop 2 $ splits
+    user        = uncurry User . (Nick *** drop 1) . break (== '!') $ source
+    mode        = splits !! 3
+    modeArgs    = drop 4 splits
+    kicked      = splits !! 3
+    kickReason  = drop 1 . unwords . drop 4 $ splits
+    isActionMsg = "\SOH" `isPrefixOf` message && "ACTION" `isPrefixOf` drop 1 message
 
 partitionMsgParts :: MessageParseType -> Text -> [MessagePart] -> ([MessagePart], [MessagePart])
 partitionMsgParts parserType target =
@@ -96,11 +96,13 @@ lineFromCommand :: BotConfig -> Command -> Maybe Text
 lineFromCommand BotConfig { .. } command = case command of
   PongCmd { .. }                  -> Just $ "PONG :" ++ rmsg
   PingCmd { .. }                  -> Just $ "PING :" ++ rmsg
-  NickCmd                         -> Just $ "NICK " ++ nickToText botNick
-  UserCmd                         -> Just $ "USER " ++ nickToText botNick ++ " 0 * :" ++ nickToText botNick
+  NickCmd                         -> Just $ "NICK " ++ botNick'
+  UserCmd                         -> Just $ "USER " ++ botNick' ++ " 0 * :" ++ botNick'
   JoinCmd                         -> Just $ "JOIN " ++ channel
   QuitCmd                         -> Just "QUIT"
   ChannelMsgReply { .. }          -> Just $ "PRIVMSG " ++ channel ++ " :" ++ rmsg
   PrivMsgReply (User { .. }) rmsg -> Just $ "PRIVMSG " ++ nickToText userNick ++ " :" ++ rmsg
   NamesCmd                        -> Just $ "NAMES " ++ channel
   _                               -> Nothing
+  where
+    botNick' = nickToText botNick

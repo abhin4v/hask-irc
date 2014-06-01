@@ -1,7 +1,6 @@
 module Network.IRC.Handlers.Core (mkMsgHandler) where
 
 import ClassyPrelude
-import Control.Concurrent.Lifted  (Chan)
 import Control.Monad.Reader       (ask)
 import Data.Convertible           (convert)
 import Data.Time                  (addUTCTime)
@@ -9,7 +8,7 @@ import Data.Time                  (addUTCTime)
 import Network.IRC.Types
 import Network.IRC.Util
 
-mkMsgHandler :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+mkMsgHandler :: MsgHandlerMaker
 mkMsgHandler _ _ "pingpong" = do
   state <- getCurrentTime >>= newIORef
   return . Just $ newMsgHandler { onMessage = pingPong state }
@@ -44,11 +43,13 @@ help Message { msgDetails = ChannelMsg { .. }, .. }
   | "!help" == clean msg = do
       BotConfig { .. } <- ask
       let commands = concatMap mapKeys . mapValues $ msgHandlerInfo
-      return [ChannelMsgReply $ "I know these commands: " ++ unwords commands]
+      return [ ChannelMsgReply $ "I know these commands: " ++ unwords commands
+             , ChannelMsgReply "Type !help <command> to know more about any command"]
   | "!help" `isPrefixOf` msg = do
       BotConfig { .. } <- ask
-      let command = cons '!'. dropWhile (== '!') . clean . unwords . drop 1 . words $ msg
-      let mHelp   = find ((== command) . fst) . concatMap mapToList . mapValues $ msgHandlerInfo
+      let command = dropWhile (== '!') . clean . unwords . drop 1 . words $ msg
+      let mHelp   = find ((\c -> c == command || c == cons '!' command) . fst)
+                    . concatMap mapToList . mapValues $ msgHandlerInfo
       return [ChannelMsgReply $ maybe ("No such command found: " ++ command) snd mHelp]
 
 help _ = return []

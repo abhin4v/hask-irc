@@ -2,13 +2,13 @@
 
 module Network.IRC.Util where
 
-import qualified Data.Text.Lazy          as LzT
 import qualified Data.Text.Format        as TF
 
 import ClassyPrelude
 import Control.Arrow             (Arrow)
 import Control.Concurrent.Lifted (Chan)
 import Control.Monad.Base        (MonadBase)
+import Data.Convertible          (convert)
 import Data.Text                 (strip)
 import Data.Time                 (diffUTCTime)
 
@@ -49,7 +49,7 @@ atomicModIORef ref f = void . atomicModifyIORef' ref $ \v -> (f v, v)
 -- | Display a time span as one time relative to another.
 relativeTime :: UTCTime -> UTCTime -> Text
 relativeTime t1 t2 =
-  maybe "unknown" (LzT.toStrict . format) $ find (\(s,_,_) -> abs period >= s) ranges
+  maybe "unknown" (convert . format) $ find (\(s,_,_) -> abs period >= s) ranges
   where
     minute = 60; hour = minute * 60; day = hour * 24;
     week = day * 7; month = day * 30; year = month * 12
