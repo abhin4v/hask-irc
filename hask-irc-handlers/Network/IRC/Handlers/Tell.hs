@@ -126,15 +126,17 @@ stopTell state = io $ do
   createCheckpointAndClose acid
 
 mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler BotConfig { .. } eventChan "tells" = do
-  acid  <- openLocalState emptyTells
-  state <- newIORef (TellState acid)
-  return . Just $ newMsgHandler { onMessage = tellMsg eventChan state
-                                , onEvent   = tellEvent eventChan state
-                                , onStop    = stopTell state
-                                , onHelp    = return helpMsgs }
+mkMsgHandler = MsgHandlerMaker "tell" go
   where
+    go BotConfig { .. } eventChan "tell" = do
+      acid  <- openLocalState emptyTells
+      state <- newIORef (TellState acid)
+      return . Just $ newMsgHandler { onMessage = tellMsg eventChan state
+                                    , onEvent   = tellEvent eventChan state
+                                    , onStop    = stopTell state
+                                    , onHelp    = return helpMsgs }
+    go _ _ _                            = return Nothing
+
     helpMsgs = mapFromList [
       ("!tell", "Publically passes a message to a user or a bunch of users. " ++
                 "!tell <nick> <message> or !tell <<nick1> <nick2> ...> <message>.") ]
-mkMsgHandler _ _ _                            = return Nothing

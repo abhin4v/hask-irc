@@ -21,12 +21,14 @@ import Network.IRC.Types
 $(deriveLoggers "HSL" [HSL.ERROR])
 
 mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler _ _ "songsearch" =
-  return . Just $ newMsgHandler { onMessage = songSearch,
-                                  onHelp    = return $ singletonMap "!m" helpMsg }
+mkMsgHandler = MsgHandlerMaker "songsearch" go
   where
     helpMsg = "Search for song. !m <song> or !m <artist> - <song>"
-mkMsgHandler _ _ _            = return Nothing
+
+    go _ _ "songsearch" =
+      return . Just $ newMsgHandler { onMessage = songSearch,
+                                      onHelp    = return $ singletonMap "!m" helpMsg }
+    go _ _ _            = return Nothing
 
 data Song = NoSong | Song { url :: Text, name :: Text, artist :: Text }
             deriving (Show, Eq)

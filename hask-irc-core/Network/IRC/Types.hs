@@ -28,7 +28,7 @@ module Network.IRC.Types
   , handleEvent
   , stopMsgHandler
   , getHelp
-  , MsgHandlerMaker )
+  , MsgHandlerMaker (..))
 where
 
 import ClassyPrelude
@@ -211,4 +211,12 @@ newMsgHandler = MsgHandler {
   onHelp    = return mempty
 }
 
-type MsgHandlerMaker = BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+data MsgHandlerMaker = MsgHandlerMaker {
+  msgHandlerName  :: !MsgHandlerName,
+  msgHandlerMaker :: BotConfig -> Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+}
+
+instance Eq MsgHandlerMaker where
+  m1 == m2 = msgHandlerName m1 == msgHandlerName m2
+instance Ord MsgHandlerMaker where
+  m1 `compare` m2 = msgHandlerName m1 `compare` msgHandlerName m2

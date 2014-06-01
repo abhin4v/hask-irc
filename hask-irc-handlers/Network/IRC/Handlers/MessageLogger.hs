@@ -20,12 +20,14 @@ import Network.IRC.Util
 type LoggerState = Maybe (Handle, Day)
 
 mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler botConfig _ "messagelogger" = do
-  state <- io $ newIORef Nothing
-  initMessageLogger botConfig state
-  return . Just $ newMsgHandler { onMessage = flip messageLogger state
-                                , onStop    = exitMessageLogger state }
-mkMsgHandler _ _ _                       = return Nothing
+mkMsgHandler = MsgHandlerMaker "messagelogger" go
+  where
+    go botConfig _ "messagelogger" = do
+      state <- io $ newIORef Nothing
+      initMessageLogger botConfig state
+      return . Just $ newMsgHandler { onMessage = flip messageLogger state
+                                    , onStop    = exitMessageLogger state }
+    go _ _ _                       = return Nothing
 
 getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do

@@ -187,19 +187,21 @@ stopNickTracker state = io $ do
   createCheckpointAndClose acid
 
 mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler BotConfig { .. } _ "nicktracker" = do
-  state <- io $ do
-    now             <- getCurrentTime
-    refreshInterval <- map convert (CF.lookupDefault 60 config "nicktracker.refresh_interval" :: IO Int)
-    acid            <- openLocalState emptyNickTracking
-    newIORef (NickTrackingState acid refreshInterval mempty now)
-  return . Just $ newMsgHandler { onMessage = nickTrackerMsg state
-                                , onEvent   = nickTrackerEvent state
-                                , onStop    = stopNickTracker state
-                                , onHelp    = return helpMsgs }
+mkMsgHandler = MsgHandlerMaker "nicktracker" go
   where
     helpMsgs = mapFromList [
       ("!nicks", "Shows alternate nicks of the user. !nicks <nick>"),
       ("!seen", "Lets you know when a user was last seen online and last spoke in the channel. !seen <user nick>"),
       ("!forgetnicks", "Forgets all your alternate nicks. !forgetnicks") ]
-mkMsgHandler _ _ _                            = return Nothing
+
+    go BotConfig { .. } _ "nicktracker" = do
+      state <- io $ do
+        now             <- getCurrentTime
+        refreshInterval <- map convert (CF.lookupDefault 60 config "nicktracker.refresh_interval" :: IO Int)
+        acid            <- openLocalState emptyNickTracking
+        newIORef (NickTrackingState acid refreshInterval mempty now)
+      return . Just $ newMsgHandler { onMessage = nickTrackerMsg state
+                                    , onEvent   = nickTrackerEvent state
+                                    , onStop    = stopNickTracker state
+                                    , onHelp    = return helpMsgs }
+    go _ _ _                            = return Nothing

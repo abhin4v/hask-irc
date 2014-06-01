@@ -9,15 +9,17 @@ import Network.IRC.Types
 import Network.IRC.Util
 
 mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler _ _ "pingpong" = do
-  state <- getCurrentTime >>= newIORef
-  return . Just $ newMsgHandler { onMessage = pingPong state }
-mkMsgHandler _ _ "help"     =
-    return . Just $ newMsgHandler { onMessage = help,
-                                    onHelp    = return $ singletonMap "!help" helpMsg }
+mkMsgHandler = MsgHandlerMaker "core" go
   where
+    go _ _ "pingpong" = do
+      state <- getCurrentTime >>= newIORef
+      return . Just $ newMsgHandler { onMessage = pingPong state }
+    go _ _ "help"     =
+        return . Just $ newMsgHandler { onMessage = help,
+                                        onHelp    = return $ singletonMap "!help" helpMsg }
+    go _ _ _          = return Nothing
+
     helpMsg = "Get help. !help or !help <command>"
-mkMsgHandler _ _ _          = return Nothing
 
 pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m [Command]
 pingPong state Message { msgDetails = PingMsg { .. }, .. } = do

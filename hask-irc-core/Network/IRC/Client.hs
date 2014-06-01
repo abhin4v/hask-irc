@@ -18,6 +18,7 @@ import System.Log.Logger.TH      (deriveLoggers)
 import System.Posix.Signals      (installHandler, sigINT, sigTERM, Handler (Catch))
 
 import Network.IRC.Bot
+import qualified Network.IRC.Handlers.Core as Core
 import Network.IRC.Types
 import Network.IRC.Util
 
@@ -56,7 +57,7 @@ connect botConfig@BotConfig { .. } = do
       flip (`foldM` Nothing) msgHandlerMakers $ \finalHandler handler ->
         case finalHandler of
           Just _  -> return finalHandler
-          Nothing -> handler botConfig eventChan name
+          Nothing -> msgHandlerMaker handler botConfig eventChan name
 
     loadMsgHandlers eventChan =
       flip (`foldM` mempty) (mapKeys msgHandlerInfo) $ \hMap msgHandlerName -> do
@@ -99,7 +100,8 @@ runBotIntenal botConfig' = withSocketsDo $ do
     botConfig = botConfig' {
       msgHandlerInfo =
         foldl' (\m name -> insertMap name mempty m) mempty
-          (hashNub $ mapKeys (msgHandlerInfo botConfig') ++ coreMsgHandlerNames)
+          (hashNub $ mapKeys (msgHandlerInfo botConfig') ++ coreMsgHandlerNames),
+      msgHandlerMakers = ordNub $ Core.mkMsgHandler : msgHandlerMakers botConfig'
     }
 
     handleErrors :: SomeException -> IO BotStatus

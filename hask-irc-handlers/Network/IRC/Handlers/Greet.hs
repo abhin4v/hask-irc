@@ -7,9 +7,11 @@ import Network.IRC.Types
 import Network.IRC.Util
 
 mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler _ _ "greeter"  = return . Just $ newMsgHandler { onMessage = greeter }
-mkMsgHandler _ _ "welcomer" = return . Just $ newMsgHandler { onMessage = welcomer }
-mkMsgHandler _ _ _          = return Nothing
+mkMsgHandler = MsgHandlerMaker "greeter" go
+  where
+    go _ _ "greeter"  = return . Just $ newMsgHandler { onMessage = greeter }
+    go _ _ "welcomer" = return . Just $ newMsgHandler { onMessage = welcomer }
+    go _ _ _          = return Nothing
 
 greeter ::  MonadMsgHandler m => Message -> m [Command]
 greeter Message { msgDetails = ChannelMsg { .. }, .. } =

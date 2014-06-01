@@ -66,12 +66,14 @@ authEvent state event = case fromEvent event of
   _                                    -> return RespNothing
 
 mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler BotConfig { .. } _ "auth" = do
-  state <- io $ openLocalState emptyAuth >>= newIORef
-  return . Just $ newMsgHandler { onMessage = authMessage state
-                                , onEvent   = authEvent state
-                                , onStop    = stopAuth state
-                                , onHelp    = return $ singletonMap "token" helpMsg }
+mkMsgHandler = MsgHandlerMaker "auth" go
   where
-    helpMsg = "Send a PM to get a new auth token. /msg " ++ nickToText botNick ++ " token"
-mkMsgHandler _ _ _                     = return Nothing
+    helpMsg botNick = "Send a PM to get a new auth token. /msg " ++ nickToText botNick ++ " token"
+
+    go BotConfig { .. } _ "auth" = do
+      state <- io $ openLocalState emptyAuth >>= newIORef
+      return . Just $ newMsgHandler { onMessage = authMessage state
+                                    , onEvent   = authEvent state
+                                    , onStop    = stopAuth state
+                                    , onHelp    = return $ singletonMap "token" (helpMsg botNick) }
+    go _ _ _                     = return Nothing

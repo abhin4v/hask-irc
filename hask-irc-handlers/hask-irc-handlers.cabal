@@ -78,7 +78,6 @@ library
   exposed-modules:     Network.IRC.Handlers,
                        Network.IRC.Handlers.Auth,
                        Network.IRC.Handlers.Auth.Types,
-                       Network.IRC.Handlers.Core,
                        Network.IRC.Handlers.Greet,
                        Network.IRC.Handlers.MessageLogger,
                        Network.IRC.Handlers.NickTracker,
