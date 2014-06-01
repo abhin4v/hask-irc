@@ -3,9 +3,10 @@
 module Network.IRC.Handlers.NickTracker.Types where
 
 import ClassyPrelude
-import Data.Data     (Data)
-import Data.IxSet    (IxSet, Indexable (..), ixSet, ixFun)
-import Data.SafeCopy (base, deriveSafeCopy)
+import Control.Concurrent.Lifted (Chan, writeChan)
+import Data.Data                 (Data)
+import Data.IxSet                (IxSet, Indexable (..), ixSet, ixFun)
+import Data.SafeCopy             (base, deriveSafeCopy)
 
 import Network.IRC.Types
 
@@ -35,3 +36,17 @@ $(deriveSafeCopy 0 'base ''NickTracking)
 
 emptyNickTracking :: NickTracking
 emptyNickTracking = NickTracking empty
+
+data NickTrackRequest = NickTrackRequest Nick (MVar (Maybe NickTrack)) deriving (Typeable)
+
+instance Event NickTrackRequest
+
+instance Show NickTrackRequest where
+  show (NickTrackRequest nick _) = "NickTrackRequest[" ++ unpack (nickToText nick) ++ "]"
+
+getCanonicalNick :: Chan SomeEvent -> Nick -> IO (Maybe CanonicalNick)
+getCanonicalNick eventChan nick = do
+  reply <- newEmptyMVar
+  request <- toEvent $ NickTrackRequest nick reply
+  writeChan eventChan request
+  map (map canonicalNick) $ takeMVar reply

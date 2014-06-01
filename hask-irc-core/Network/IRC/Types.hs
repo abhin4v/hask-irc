@@ -172,7 +172,7 @@ class (MonadIO m, Applicative m, MonadReader BotConfig m, MonadBase IO m) => Mon
 instance MonadMsgHandler MsgHandlerT where
   msgHandler = id
 
-handleMessage :: MsgHandler -> BotConfig -> Message -> IO (Maybe Command)
+handleMessage :: MsgHandler -> BotConfig -> Message -> IO [Command]
 handleMessage MsgHandler { .. } botConfig =
   flip runReaderT botConfig . _runMsgHandler . onMessage
 
@@ -189,7 +189,7 @@ getHelp MsgHandler { .. } botConfig =
   flip runReaderT botConfig . _runMsgHandler $ onHelp
 
 data MsgHandler = MsgHandler {
-  onMessage :: !(forall m . MonadMsgHandler m => Message -> m (Maybe Command)),
+  onMessage :: !(forall m . MonadMsgHandler m => Message -> m [Command]),
   onStop    :: !(forall m . MonadMsgHandler m => m ()),
   onEvent   :: !(forall m . MonadMsgHandler m => SomeEvent -> m EventResponse),
   onHelp    :: !(forall m . MonadMsgHandler m => m (Map Text Text))
@@ -197,7 +197,7 @@ data MsgHandler = MsgHandler {
 
 newMsgHandler :: MsgHandler
 newMsgHandler = MsgHandler {
-  onMessage = const $ return Nothing,
+  onMessage = const $ return [],
   onStop    = return (),
   onEvent   = const $ return RespNothing,
   onHelp    = return mempty

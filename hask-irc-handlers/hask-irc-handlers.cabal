@@ -83,7 +83,9 @@ library
                        Network.IRC.Handlers.MessageLogger,
                        Network.IRC.Handlers.NickTracker,
                        Network.IRC.Handlers.NickTracker.Types,
-                       Network.IRC.Handlers.SongSearch
+                       Network.IRC.Handlers.SongSearch,
+                       Network.IRC.Handlers.Tell,
+                       Network.IRC.Handlers.Tell.Types
 
   default-language:    Haskell2010
 

@@ -8,6 +8,7 @@ import qualified Network.IRC.Handlers.Greet         as Greet
 import qualified Network.IRC.Handlers.MessageLogger as Logger
 import qualified Network.IRC.Handlers.NickTracker   as NickTracker
 import qualified Network.IRC.Handlers.SongSearch    as SongSearch
+import qualified Network.IRC.Handlers.Tell          as Tell
 
 import ClassyPrelude
 import Control.Concurrent.Lifted  (Chan)
@@ -32,4 +33,5 @@ mkMsgHandler botConfig eventChan name =
       , Logger.mkMsgHandler
       , NickTracker.mkMsgHandler
       , SongSearch.mkMsgHandler
+      , Tell.mkMsgHandler
       ]

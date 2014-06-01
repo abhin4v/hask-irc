@@ -12,22 +12,22 @@ mkMsgHandler _ _ "greeter"  = return . Just $ newMsgHandler { onMessage = greete
 mkMsgHandler _ _ "welcomer" = return . Just $ newMsgHandler { onMessage = welcomer }
 mkMsgHandler _ _ _          = return Nothing
 
-greeter ::  MonadMsgHandler m => Message -> m (Maybe Command)
+greeter ::  MonadMsgHandler m => Message -> m [Command]
 greeter Message { msgDetails = ChannelMsg { .. }, .. } =
-  return . map (ChannelMsgReply . (++ nickToText (userNick user)) . (++ " "))
+  return . maybeToList . map (ChannelMsgReply . (++ nickToText (userNick user)) . (++ " "))
     . find (== clean msg) $ greetings
   where
     greetings = [ "hi", "hello", "hey", "sup", "bye"
                 , "good morning", "good evening", "good night" ]
-greeter _ = return Nothing
+greeter _ = return []
 
-welcomer :: MonadMsgHandler m => Message -> m (Maybe Command)
+welcomer :: MonadMsgHandler m => Message -> m [Command]
 welcomer Message { msgDetails = JoinMsg { .. }, .. } = do
   BotConfig { .. } <- ask
   if userNick user /= botNick
-    then return . Just . ChannelMsgReply $ "welcome back " ++ nickToText (userNick user)
-    else return Nothing
+    then return [ChannelMsgReply $ "welcome back " ++ nickToText (userNick user)]
+    else return []
 
-welcomer _ = return Nothing
+welcomer _ = return []
 
 

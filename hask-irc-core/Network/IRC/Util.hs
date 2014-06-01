@@ -57,10 +57,9 @@ relativeTime t1 t2 =
     format range =
       (if period > 0 then "in " else "")
       ++ case range of
-          (0, _, _)      -> "moments"
           (_, str, 0)    -> pack str
           (_, str, base) -> TF.format (fromString str) $ TF.Only (abs $ round (period / base) :: Integer)
-      ++ (if period < 0 then " ago" else "")
+      ++ (if period <= 0 then " ago" else "")
 
     period = t1 `diffUTCTime` t2
 

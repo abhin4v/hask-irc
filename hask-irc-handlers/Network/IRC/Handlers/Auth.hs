@@ -43,11 +43,11 @@ issueToken acid user = do
 
 -- handler
 
-authMessage :: MonadMsgHandler m => IORef (AcidState Auth) -> Message ->  m (Maybe Command)
+authMessage :: MonadMsgHandler m => IORef (AcidState Auth) -> Message ->  m [Command]
 authMessage state Message { msgDetails = PrivMsg { .. }, .. }
-  | "token" `isPrefixOf` msg = map (Just . PrivMsgReply user) . io $
+  | "token" `isPrefixOf` msg = map (singleton . PrivMsgReply user) . io $
       readIORef state >>= flip issueToken (userNick user)
-authMessage _ _ = return Nothing
+authMessage _ _ = return []
 
 stopAuth :: MonadMsgHandler m => IORef (AcidState Auth) -> m ()
 stopAuth state = io $ do

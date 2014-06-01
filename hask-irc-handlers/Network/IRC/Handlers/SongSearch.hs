@@ -37,14 +37,14 @@ instance FromJSON Song where
     parseJSON a | a == emptyArray = return NoSong
     parseJSON _                   = mempty
 
-songSearch :: MonadMsgHandler m => Message -> m (Maybe Command)
+songSearch :: MonadMsgHandler m => Message -> m [Command]
 songSearch Message { msgDetails = ChannelMsg { .. }, .. }
   | "!m " `isPrefixOf` msg = do
       BotConfig { .. } <- ask
       liftIO $ do
         let query = strip . drop 3 $ msg
         mApiKey <- CF.lookup config "songsearch.tinysong_apikey"
-        map (Just . ChannelMsgReply) $ case mApiKey of
+        map (singleton . ChannelMsgReply) $ case mApiKey of
           Nothing     -> do
             errorM "tinysong api key not found in config"
             return $ "Error while searching for " ++ query
@@ -58,5 +58,5 @@ songSearch Message { msgDetails = ChannelMsg { .. }, .. }
               Right song                     -> case song of
                 Song { .. } -> "Listen to " ++ artist ++ " - " ++ name ++ " at " ++ url
                 NoSong      -> "No song found for: " ++ query
-  | otherwise              = return Nothing
-songSearch _ = return Nothing
+  | otherwise              = return []
+songSearch _ = return []

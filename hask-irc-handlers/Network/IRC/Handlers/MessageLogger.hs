@@ -50,7 +50,7 @@ initMessageLogger botConfig state = do
 exitMessageLogger :: MonadMsgHandler m => IORef LoggerState -> m ()
 exitMessageLogger state = io $ readIORef state >>= flip whenJust (hClose . fst)
 
-withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> IORef LoggerState -> m (Maybe Command)
+withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> IORef LoggerState -> m [Command]
 withLogFile action state = do
   botConfig <- ask
   io $ do
@@ -70,9 +70,9 @@ withLogFile action state = do
     action logFileHandle'
     atomicWriteIORef state $ Just (logFileHandle', curDay)
 
-  return Nothing
+  return []
 
-messageLogger :: MonadMsgHandler m => Message -> IORef LoggerState -> m (Maybe Command)
+messageLogger :: MonadMsgHandler m => Message -> IORef LoggerState -> m [Command]
 messageLogger Message { .. } = case msgDetails of
   ChannelMsg { .. } -> log "<{}> {}"                  [nick user, msg]
   ActionMsg { .. }  -> log "<{}> {} {}"               [nick user, nick user, msg]
@@ -82,7 +82,7 @@ messageLogger Message { .. } = case msgDetails of
   QuitMsg { .. }    -> log "** {} QUIT :{}"           [nick user, msg]
   NickMsg { .. }    -> log "** {} CHANGED NICK TO {}" [nick user, nickToText newNick]
   NamesMsg { .. }   -> log "** USERS {}"              [unwords . map nickToText $ nicks]
-  _                 -> const $ return Nothing
+  _                 -> const $ return []
   where
     nick = nickToText . userNick
 

@@ -20,13 +20,13 @@ mkMsgHandler _ _ "help"     =
     helpMsg = "Get help. !help or !help <command>"
 mkMsgHandler _ _ _          = return Nothing
 
-pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m (Maybe Command)
+pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m [Command]
 pingPong state Message { msgDetails = PingMsg { .. }, .. } = do
   io $ atomicWriteIORef state msgTime
-  return . Just $ PongCmd msg
+  return [PongCmd msg]
 pingPong state Message { msgDetails = PongMsg { .. }, .. } = do
   io $ atomicWriteIORef state msgTime
-  return Nothing
+  return []
 pingPong state Message { msgDetails = IdleMsg { .. }, .. }
   | even (convert msgTime :: Int) = do
     BotConfig { .. } <- ask
@@ -34,21 +34,21 @@ pingPong state Message { msgDetails = IdleMsg { .. }, .. }
     io $ do
       lastComm <- readIORef state
       if addUTCTime limit lastComm < msgTime
-        then return . Just . PingCmd . pack . formatTime defaultTimeLocale "%s" $ msgTime
-        else return Nothing
+        then return [PingCmd . pack . formatTime defaultTimeLocale "%s" $ msgTime]
+        else return []
 
-pingPong _ _ = return Nothing
+pingPong _ _ = return []
 
-help :: MonadMsgHandler m => Message -> m (Maybe Command)
+help :: MonadMsgHandler m => Message -> m [Command]
 help Message { msgDetails = ChannelMsg { .. }, .. }
   | "!help" == clean msg = do
       BotConfig { .. } <- ask
       let commands = concatMap mapKeys . mapValues $ msgHandlerInfo
-      return . Just . ChannelMsgReply $ "I know these commands: " ++ unwords commands
+      return [ChannelMsgReply $ "I know these commands: " ++ unwords commands]
   | "!help" `isPrefixOf` msg = do
       BotConfig { .. } <- ask
       let command = cons '!'. dropWhile (== '!') . clean . unwords . drop 1 . words $ msg
       let mHelp   = find ((== command) . fst) . concatMap mapToList . mapValues $ msgHandlerInfo
-      return . Just . ChannelMsgReply $ maybe ("No such command found: " ++ command) snd mHelp
+      return [ChannelMsgReply $ maybe ("No such command found: " ++ command) snd mHelp]
 
-help _ = return Nothing
+help _ = return []

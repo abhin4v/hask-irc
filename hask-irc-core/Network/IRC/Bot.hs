@@ -143,8 +143,8 @@ messageProcessLoop = messageProcessLoop' 0
           forM_ (mapValues msgHandlers) $ \msgHandler -> void . fork $
             handle (\(e :: SomeException) ->
                       errorM $ "Exception while processing message: " ++ show e) $ do
-              mCmd <- handleMessage msgHandler botConfig message
-              whenJust mCmd (sendCommand commandChan)
+              cmds <- handleMessage msgHandler botConfig message
+              forM_ cmds (sendCommand commandChan)
 
 eventProcessLoop :: Channel SomeEvent -> Chan Line -> Chan Command -> Bot -> IO ()
 eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
