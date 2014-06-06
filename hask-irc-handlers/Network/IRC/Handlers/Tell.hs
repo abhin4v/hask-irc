@@ -31,9 +31,9 @@ getUndeliveredTellsQ nick = do
 saveTellQ :: Tell -> Update Tells ()
 saveTellQ tell@Tell { .. } = do
   Tells { .. } <- get
-  if tellId == -1
-    then put $ Tells (nextTellId + 1) (IS.updateIx nextTellId tell{ tellId = nextTellId } tells)
-    else put $ Tells nextTellId (IS.updateIx tellId tell tells)
+  put $ if tellId == -1
+    then Tells (nextTellId + 1) (IS.updateIx nextTellId tell{ tellId = nextTellId } tells)
+    else Tells nextTellId (IS.updateIx tellId tell tells)
 
 $(makeAcidic ''Tells ['getUndeliveredTellsQ, 'saveTellQ])
 
@@ -137,6 +137,6 @@ mkMsgHandler = MsgHandlerMaker "tell" go
                                     , onHelp    = return helpMsgs }
     go _ _ _                            = return Nothing
 
-    helpMsgs = mapFromList [
-      ("!tell", "Publically passes a message to a user or a bunch of users. " ++
-                "!tell <nick> <message> or !tell <<nick1> <nick2> ...> <message>.") ]
+    helpMsgs = singletonMap "!tell" $
+      "Publically passes a message to a user or a bunch of users. " ++
+      "!tell <nick> <message> or !tell <<nick1> <nick2> ...> <message>."

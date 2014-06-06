@@ -1,3 +1,13 @@
+{-|
+Module      : Network.IRC.Client
+Description : The IRC bot client used to create and run the bot.
+Copyright   : (c) Abhinav Sarkar, 2014
+License     : Apache-2.0
+Maintainer  : abhinav@abhinavsarkar.net
+Stability   : experimental
+Portability : POSIX
+-}
+
 {-# LANGUAGE TemplateHaskell #-}
 
 module Network.IRC.Client (runBot) where
@@ -17,9 +27,10 @@ import System.Log.Logger         (Priority (..), updateGlobalLogger, rootLoggerN
 import System.Log.Logger.TH      (deriveLoggers)
 import System.Posix.Signals      (installHandler, sigINT, sigTERM, Handler (Catch))
 
-import Network.IRC.Bot
 import qualified Network.IRC.Handlers.Core as Core
-import Network.IRC.Types
+
+import Network.IRC.Bot
+import Network.IRC.Internal.Types
 import Network.IRC.Util
 
 $(deriveLoggers "HSL" [HSL.DEBUG, HSL.ERROR])
@@ -80,7 +91,7 @@ disconnect (Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch), (
   awaitLatch eventLatch
 
   unloadMsgHandlers
-  handle (\(_ :: SomeException) -> return ()) $ hClose socket
+  handle (\(_ :: SomeException) -> return ()) $ hClose botSocket
   debugM "Disconnected"
   where
     unloadMsgHandlers = forM_ (mapToList msgHandlers) $ \(msgHandlerName, msgHandler) -> do
@@ -122,7 +133,9 @@ runBotIntenal botConfig' = withSocketsDo $ do
           fork $ eventProcessLoop eventChannel lineChan commandChan bot
           runIRC bot Connected (messageProcessLoop lineChan commandChan)
 
-runBot :: BotConfig -> IO ()
+-- | Creates and runs an IRC bot for given the config. This IO action runs forever.
+runBot :: BotConfig -- ^ The bot config used to create the bot.
+       -> IO ()
 runBot botConfig = do
   -- setup signal handling
   mainThreadId <- myThreadId

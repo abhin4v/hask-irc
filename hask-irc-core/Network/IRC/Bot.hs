@@ -25,8 +25,8 @@ import System.IO                 (hIsEOF)
 import System.Timeout            (timeout)
 import System.Log.Logger.TH      (deriveLoggers)
 
+import Network.IRC.Internal.Types
 import Network.IRC.Protocol
-import Network.IRC.Types
 import Network.IRC.Util
 
 $(deriveLoggers "HSL" [HSL.DEBUG, HSL.INFO, HSL.ERROR])
@@ -52,7 +52,7 @@ sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
   handle (\(e :: SomeException) ->
             errorM ("Error while writing to connection: " ++ show e) >> latchIt latch) $ do
     whenJust mline $ \line -> do
-      TF.hprint socket "{}\r\n" $ TF.Only line
+      TF.hprint botSocket "{}\r\n" $ TF.Only line
       infoM . unpack $ "> " ++ line
     case cmd of
       QuitCmd -> latchIt latch
@@ -87,11 +87,11 @@ readLineLoop = go []
           go msgParts'' mvBotStatus (lineChan, latch) bot timeoutDelay
       where
         readLine' = do
-          eof <- hIsEOF socket
+          eof <- hIsEOF botSocket
           if eof
             then return EOF
             else mask $ \unmask -> do
-              line <- map initEx . unmask $ hGetLine socket
+              line <- map initEx . unmask $ hGetLine botSocket
               infoM . unpack $ "< " ++ line
               now <- getCurrentTime
               return $ Line now line
@@ -157,8 +157,8 @@ eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
                   errorM $ "Exception while processing event: " ++ show ex) $ do
           resp <- handleEvent msgHandler botConfig event
           case resp of
-            RespMessage message -> sendMessage lineChan message
-            RespCommand command -> sendCommand commandChan command
-            RespEvent event'    -> sendEvent eventChan event'
-            _                   -> return ()
+            RespMessage messages -> forM_ messages $ sendMessage lineChan
+            RespCommand commands -> forM_ commands $ sendCommand commandChan
+            RespEvent events     -> forM_ events $ sendEvent eventChan
+            _                    -> return ()
       eventProcessLoop (eventChan, latch) lineChan commandChan bot

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 module Network.IRC.Util where
 
