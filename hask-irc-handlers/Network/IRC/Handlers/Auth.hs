@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Network.IRC.Handlers.Auth (mkMsgHandler) where
+module Network.IRC.Handlers.Auth (authMsgHandlerMaker) where
 
 import qualified Data.UUID    as U
 import qualified Data.UUID.V4 as U
@@ -65,8 +65,8 @@ authEvent state event = case fromEvent event of
     return RespNothing
   _                                    -> return RespNothing
 
-mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler = MsgHandlerMaker "auth" go
+authMsgHandlerMaker :: MsgHandlerMaker
+authMsgHandlerMaker = MsgHandlerMaker "auth" go
   where
     helpMsg botNick = "Send a PM to get a new auth token. /msg " ++ nickToText botNick ++ " token"
 

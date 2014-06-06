@@ -1,4 +1,4 @@
-module Network.IRC.Handlers.Greet (mkMsgHandler) where
+module Network.IRC.Handlers.Greet (greetMsgHandlerMaker) where
 
 import ClassyPrelude
 import Control.Monad.Reader (ask)
@@ -6,8 +6,8 @@ import Control.Monad.Reader (ask)
 import Network.IRC.Types
 import Network.IRC.Util
 
-mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler = MsgHandlerMaker "greeter" go
+greetMsgHandlerMaker :: MsgHandlerMaker
+greetMsgHandlerMaker = MsgHandlerMaker "greeter" go
   where
     go _ _ "greeter"  = return . Just $ newMsgHandler { onMessage = greeter }
     go _ _ "welcomer" = return . Just $ newMsgHandler { onMessage = welcomer }

@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Network.IRC.Handlers.NickTracker (mkMsgHandler) where
+module Network.IRC.Handlers.NickTracker (nickTrackerMsgHandlerMaker) where
 
 import qualified Data.Configurator as CF
 import qualified Data.IxSet        as IS
@@ -18,7 +18,7 @@ import Data.Convertible     (convert)
 import Data.IxSet           (getOne, (@=))
 import Data.Time            (addUTCTime, NominalDiffTime)
 
-import Network.IRC.Handlers.NickTracker.Types
+import Network.IRC.Handlers.NickTracker.Internal.Types
 import Network.IRC.Types
 import Network.IRC.Util
 
@@ -101,7 +101,7 @@ updateNickTrack state user message msgTime = io $ do
     (_, Just (NickTrack { .. }))  -> return (message, msgTime, canonicalNick)
     _                             -> newCanonicalNick >>= \cn -> return (message, msgTime, cn)
 
-  saveNickTrack acid $ NickTrack nck cn (LastSeenOn msgTime) lastMessageOn' message'
+  saveNickTrack acid $ NickTrack nck cn msgTime lastMessageOn' message'
 
 handleNickChange :: MonadMsgHandler m => IORef NickTrackingState -> User -> Nick -> UTCTime -> m ()
 handleNickChange state user newNick msgTime = io $ do
@@ -119,7 +119,7 @@ handleNickChange state user newNick msgTime = io $ do
     _ -> return Nothing
 
   whenJust mInfo $ \(message, cn, lastMessageOn') ->
-    saveNickTrack acid $ NickTrack newNick cn (LastSeenOn msgTime) lastMessageOn' message
+    saveNickTrack acid $ NickTrack newNick cn msgTime lastMessageOn' message
 
 newCanonicalNick :: IO CanonicalNick
 newCanonicalNick = map (CanonicalNick . pack . U.toString) U.nextRandom
@@ -141,22 +141,22 @@ withNickTracks f state message = io $ do
 handleNickCommand :: MonadMsgHandler m => IORef NickTrackingState -> Message -> m [Command]
 handleNickCommand = withNickTracks $ \nck nickTracks _ -> do
   let nicks = map ((\(Nick n) -> n) . nick) nickTracks
-  if length nicks == 1
-    then return $ nck ++ " has only one nick"
-    else return $ nck ++ "'s other nicks are: " ++ intercalate ", " (filter (/= nck) nicks)
+  return . (nck ++) $ if length nicks == 1
+    then " has only one nick"
+    else "'s other nicks are: " ++ intercalate ", " (filter (/= nck) nicks)
 
 handleSeenCommand :: MonadMsgHandler m => IORef NickTrackingState -> Message -> m [Command]
 handleSeenCommand = withNickTracks $ \nck nickTracks onlineNicks -> do
-  let NickTrack { lastSeenOn = LastSeenOn lastSeenOn'
+  let NickTrack { lastSeenOn = lastSeenOn'
                 , nick       = Nick lastSeenAs } = maximumByEx (comparing lastSeenOn) nickTracks
   let NickTrack { lastMessageOn = lastMessageOn'
                 , lastMessage   = lastMessage'
                 , nick          = Nick lastMessageAs } = maximumByEx (comparing lastMessageOn) nickTracks
   now <- io getCurrentTime
-  return $
+  return . (nck ++) $
     (if any (`member` onlineNicks) . map nick $ nickTracks
-      then nck ++ " is online now"
-      else nck ++ " was last seen " ++ relativeTime lastSeenOn' now) ++
+      then " is online now"
+      else " was last seen " ++ relativeTime lastSeenOn' now) ++
     (if nck /= lastSeenAs then " as " ++ lastSeenAs else "") ++
     (if clean lastMessage' == "" then "" else
       " and " ++ relativeTime lastMessageOn' now ++ " " ++ nck ++
@@ -186,8 +186,8 @@ stopNickTracker state = io $ do
   createArchive acid
   createCheckpointAndClose acid
 
-mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler = MsgHandlerMaker "nicktracker" go
+nickTrackerMsgHandlerMaker :: MsgHandlerMaker
+nickTrackerMsgHandlerMaker = MsgHandlerMaker "nicktracker" go
   where
     helpMsgs = mapFromList [
       ("!nicks", "Shows alternate nicks of the user. !nicks <nick>"),

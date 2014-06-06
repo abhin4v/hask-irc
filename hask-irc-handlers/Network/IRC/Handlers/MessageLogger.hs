@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Network.IRC.Handlers.MessageLogger (mkMsgHandler) where
+module Network.IRC.Handlers.MessageLogger (messageLoggerMsgHandlerMaker) where
 
 import qualified Data.Configurator       as CF
 import qualified Data.Text.Format        as TF
@@ -19,8 +19,8 @@ import Network.IRC.Util
 
 type LoggerState = Maybe (Handle, Day)
 
-mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler = MsgHandlerMaker "messagelogger" go
+messageLoggerMsgHandlerMaker :: MsgHandlerMaker
+messageLoggerMsgHandlerMaker = MsgHandlerMaker "messagelogger" go
   where
     go botConfig _ "messagelogger" = do
       state <- io $ newIORef Nothing

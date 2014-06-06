@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Network.IRC.Handlers.SongSearch (mkMsgHandler) where
+module Network.IRC.Handlers.SongSearch (songSearchMsgHandlerMaker) where
 
 import qualified Data.Configurator as CF
 import qualified System.Log.Logger as HSL
@@ -20,8 +20,8 @@ import Network.IRC.Types
 
 $(deriveLoggers "HSL" [HSL.ERROR])
 
-mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler = MsgHandlerMaker "songsearch" go
+songSearchMsgHandlerMaker :: MsgHandlerMaker
+songSearchMsgHandlerMaker = MsgHandlerMaker "songsearch" go
   where
     helpMsg = "Search for song. !m <song> or !m <artist> - <song>"
 

@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Network.IRC.Handlers.Tell (mkMsgHandler) where
+module Network.IRC.Handlers.Tell (tellMsgHandlerMaker) where
 
 import qualified Data.IxSet as IS
 
@@ -17,7 +17,7 @@ import Data.IxSet                ((@=))
 import Data.Text                 (split, strip)
 
 import Network.IRC.Handlers.NickTracker.Types
-import Network.IRC.Handlers.Tell.Types
+import Network.IRC.Handlers.Tell.Internal.Types
 import Network.IRC.Types
 import Network.IRC.Util
 
@@ -125,8 +125,8 @@ stopTell state = io $ do
   createArchive acid
   createCheckpointAndClose acid
 
-mkMsgHandler :: MsgHandlerMaker
-mkMsgHandler = MsgHandlerMaker "tell" go
+tellMsgHandlerMaker :: MsgHandlerMaker
+tellMsgHandlerMaker = MsgHandlerMaker "tell" go
   where
     go BotConfig { .. } eventChan "tell" = do
       acid  <- openLocalState emptyTells

@@ -69,7 +69,8 @@ library
                        transformers-base    >=0.4     && <0.5,
                        unix                 >=2.7     && <2.8
 
-  exposed-modules:     Network.IRC.Types,
+  exposed-modules:     Network.IRC,
+                       Network.IRC.Types,
                        Network.IRC.Client,
                        Network.IRC.Util
 
