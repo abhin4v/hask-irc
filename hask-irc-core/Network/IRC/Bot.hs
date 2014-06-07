@@ -31,15 +31,15 @@ import Network.IRC.Util
 
 $(deriveLoggers "HSL" [HSL.DEBUG, HSL.INFO, HSL.ERROR])
 
-data Line = Timeout | EOF | Line !UTCTime !Text | Msg Message deriving (Show, Eq)
+data Line = Timeout | EOF | Line !UTCTime !Text | Msg FullMessage deriving (Show, Eq)
 
 sendCommand :: Chan Command -> Command -> IO ()
 sendCommand = writeChan
 
-sendMessage :: Chan Line -> Message -> IO ()
+sendMessage :: Chan Line -> FullMessage -> IO ()
 sendMessage = (. Msg) . writeChan
 
-sendEvent :: Chan SomeEvent -> SomeEvent -> IO ()
+sendEvent :: Chan Event -> Event -> IO ()
 sendEvent = writeChan
 
 readLine :: Chan Line -> IO Line
@@ -54,9 +54,9 @@ sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
     whenJust mline $ \line -> do
       TF.hprint botSocket "{}\r\n" $ TF.Only line
       infoM . unpack $ "> " ++ line
-    case cmd of
-      QuitCmd -> latchIt latch
-      _       -> sendCommandLoop (commandChan, latch) bot
+    case fromCommand cmd of
+      Just QuitCmd -> latchIt latch
+      _            -> sendCommandLoop (commandChan, latch) bot
 
 readLineLoop :: MVar BotStatus -> Channel Line -> Bot -> Int -> IO ()
 readLineLoop = go []
@@ -83,7 +83,7 @@ readLineLoop = go []
           limit <- map (addUTCTime (- msgPartTimeout)) getCurrentTime
           let msgParts'' = concat
                            . filter ((> limit) . msgPartTime . headEx . sortBy (flip $ comparing msgPartTime))
-                           . groupAllOn (msgParserType &&& msgPartTarget) $ msgParts'
+                           . groupAllOn (msgPartParserId &&& msgPartTarget) $ msgParts'
           go msgParts'' mvBotStatus (lineChan, latch) bot timeoutDelay
       where
         readLine' = do
@@ -109,25 +109,18 @@ messageProcessLoop = go 0
           then infoM "Timeout" >> return Disconnected
           else do
             when (status == Kicked) $
-              threadDelay (5 * oneSec) >> sendCommand commandChan JoinCmd
+              threadDelay (5 * oneSec) >> sendCommand commandChan (toCommand JoinCmd)
 
             mLine <- readLine lineChan
             case mLine of
-              Timeout      ->
-                getCurrentTime >>= \t -> dispatchHandlers bot (Message t "" IdleMsg) >> return Idle
+              Timeout      -> do
+                now <- getCurrentTime
+                dispatchHandlers bot (FullMessage now "" $ toMessage IdleMsg) >> return Idle
               EOF          -> infoM "Connection closed" >> return Disconnected
               Line _ _     -> error "This should never happen"
-              Msg (message@Message { .. }) -> do
-                nStatus <- case msgDetails of
-                  JoinMsg { .. } | userNick user == nick -> infoM "Joined" >> return Joined
-                  KickMsg { .. } | kickedNick == nick    -> infoM "Kicked" >> return Kicked
-                  NickInUseMsg { .. }                    ->
-                    infoM "Nick already in use"     >> return NickNotAvailable
-                  ModeMsg { user = Self, .. }            ->
-                    sendCommand commandChan JoinCmd >> return Connected
-                  _                                      -> return Connected
-
-                dispatchHandlers bot message
+              Msg (msg@FullMessage { .. }) -> do
+                nStatus <- handleMsg nick message
+                dispatchHandlers bot msg
                 return nStatus
 
       put nStatus
@@ -145,7 +138,18 @@ messageProcessLoop = go 0
               cmds <- handleMessage msgHandler botConfig message
               forM_ cmds (sendCommand commandChan)
 
-eventProcessLoop :: Channel SomeEvent -> Chan Line -> Chan Command -> Bot -> IO ()
+        handleMsg nick message
+          | Just (JoinMsg user)   <- fromMessage message, userNick user == nick =
+              infoM "Joined" >> return Joined
+          | Just (KickMsg { .. }) <- fromMessage message, kickedNick == nick =
+              infoM "Kicked" >> return Kicked
+          | Just NickInUseMsg     <- fromMessage message =
+              infoM "Nick already in use"                 >> return NickNotAvailable
+          | Just (ModeMsg { .. }) <- fromMessage message, modeUser == Self =
+              sendCommand commandChan (toCommand JoinCmd) >> return Connected
+          | otherwise = return Connected
+
+eventProcessLoop :: Channel Event -> Chan Line -> Chan Command -> Bot -> IO ()
 eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
   event <- readChan eventChan
   case fromEvent event of

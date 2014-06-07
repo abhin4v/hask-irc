@@ -38,7 +38,7 @@ $(deriveLoggers "HSL" [HSL.DEBUG, HSL.ERROR])
 coreMsgHandlerNames :: [MsgHandlerName]
 coreMsgHandlerNames = ["pingpong", "help"]
 
-connect :: BotConfig -> IO (Bot, MVar BotStatus, Channel Line, Channel Command, Channel SomeEvent)
+connect :: BotConfig -> IO (Bot, MVar BotStatus, Channel Line, Channel Command, Channel Event)
 connect botConfig@BotConfig { .. } = do
   debugM "Connecting ..."
   socket <- connectToWithRetry
@@ -63,7 +63,7 @@ connect botConfig@BotConfig { .. } = do
 
     newChannel = (,) <$> newChan <*> newEmptyMVar
 
-    mkMsgHandler :: Chan SomeEvent -> MsgHandlerName -> IO (Maybe MsgHandler)
+    mkMsgHandler :: Chan Event -> MsgHandlerName -> IO (Maybe MsgHandler)
     mkMsgHandler eventChan name =
       flip (`foldM` Nothing) msgHandlerMakers $ \finalHandler handler ->
         case finalHandler of
@@ -80,10 +80,10 @@ connect botConfig@BotConfig { .. } = do
             return hMap
           Just msgHandler -> return $ insertMap msgHandlerName msgHandler hMap
 
-disconnect :: (Bot, MVar BotStatus, Channel Line, Channel Command, Channel SomeEvent) -> IO ()
+disconnect :: (Bot, MVar BotStatus, Channel Line, Channel Command, Channel Event) -> IO ()
 disconnect (Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch), (eventChan, eventLatch)) = do
   debugM "Disconnecting ..."
-  sendCommand commandChan QuitCmd
+  sendCommand commandChan $ toCommand QuitCmd
   awaitLatch sendLatch
   swapMVar mvBotStatus Disconnected
   awaitLatch readLatch
@@ -125,8 +125,8 @@ runBotIntenal botConfig' = withSocketsDo $ do
         handle handleErrors $ do
           debugM $ "Running with config:\n" ++ show botConfig
 
-          sendCommand commandChan NickCmd
-          sendCommand commandChan UserCmd
+          sendCommand commandChan $ toCommand NickCmd
+          sendCommand commandChan $ toCommand UserCmd
 
           fork $ sendCommandLoop (commandChan, sendLatch) bot
           fork $ readLineLoop mvBotStatus (lineChan, readLatch) bot oneSec

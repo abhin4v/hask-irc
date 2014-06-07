@@ -31,6 +31,7 @@ loadBotConfig configFile = do
           CF.require cfg "timeout"         <*>
           pure handlerInfo                 <*>
           pure allMsgHandlerMakers         <*>
+          pure []                          <*>
           pure cfg
 
       case eBotConfig of

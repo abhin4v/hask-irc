@@ -10,15 +10,47 @@ Portability : POSIX
 
 module Network.IRC.Types
   (
-    -- * IRC related
+  -- * IRC Messages
     Nick (..)
   , User (..)
-  , Message (..)
-  , MessageDetails (..)
-  , Command (..)
+  , MessageC (..)
+  , Message
+  , FullMessage (..)
+  , IdleMsg (..)
+  , NickInUseMsg (..)
+  , PingMsg (..)
+  , PongMsg (..)
+  , NamesMsg (..)
+  , ChannelMsg (..)
+  , PrivMsg (..)
+  , ActionMsg (..)
+  , JoinMsg (..)
+  , QuitMsg (..)
+  , PartMsg (..)
+  , NickMsg (..)
+  , KickMsg (..)
+  , ModeMsg (..)
+  , OtherMsg (..)
+  -- * IRC Commands
+  , CommandC (..)
+  , Command
+  , PingCmd (..)
+  , PongCmd (..)
+  , ChannelMsgReply (..)
+  , PrivMsgReply (..)
+  , NickCmd (..)
+  , UserCmd (..)
+  , JoinCmd (..)
+  , QuitCmd (..)
+  , NamesCmd (..)
+  -- * Message Parsing
+  , MessageParserId
+  , MessagePart (..)
+  , MessageParseResult (..)
+  , MessageParser (..)
   -- * Events
-  , Event (..)
-  , SomeEvent
+  , EventC (..)
+  , Event
   , EventResponse (..)
   , QuitEvent(..)
   -- * Bot

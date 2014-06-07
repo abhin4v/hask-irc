@@ -44,11 +44,11 @@ emptyTells = Tells (TellId 1) empty
 
 data TellRequest = TellRequest User Text deriving (Eq, Typeable)
 
-instance Event TellRequest
+instance EventC TellRequest
 
 instance Show TellRequest where
   show (TellRequest user tell) =
     "TellRequest[" ++ unpack (nickToText (userNick user) ++ ": " ++ tell) ++ "]"
 
-sendTell :: Chan SomeEvent -> User -> Text -> IO ()
+sendTell :: Chan Event -> User -> Text -> IO ()
 sendTell eventChan user tell = toEvent (TellRequest user tell) >>= writeChan eventChan

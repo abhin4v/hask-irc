@@ -40,12 +40,12 @@ emptyNickTracking = NickTracking empty
 
 data NickTrackRequest = NickTrackRequest Nick (MVar (Maybe NickTrack)) deriving (Eq, Typeable)
 
-instance Event NickTrackRequest
+instance EventC NickTrackRequest
 
 instance Show NickTrackRequest where
   show (NickTrackRequest nick _) = "NickTrackRequest[" ++ unpack (nickToText nick) ++ "]"
 
-getCanonicalNick :: Chan SomeEvent -> Nick -> IO (Maybe CanonicalNick)
+getCanonicalNick :: Chan Event -> Nick -> IO (Maybe CanonicalNick)
 getCanonicalNick eventChan nick = do
   reply   <- newEmptyMVar
   request <- toEvent $ NickTrackRequest nick reply

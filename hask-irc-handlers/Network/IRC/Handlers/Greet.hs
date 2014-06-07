@@ -13,22 +13,22 @@ greetMsgHandlerMaker = MsgHandlerMaker "greeter" go
     go _ _ "welcomer" = return . Just $ newMsgHandler { onMessage = welcomer }
     go _ _ _          = return Nothing
 
-greeter ::  MonadMsgHandler m => Message -> m [Command]
-greeter Message { msgDetails = ChannelMsg { .. }, .. } =
-  return . maybeToList . map (ChannelMsgReply . (++ nickToText (userNick user)) . (++ " "))
-    . find (== clean msg) $ greetings
+greeter ::  MonadMsgHandler m => FullMessage -> m [Command]
+greeter FullMessage { .. } = case fromMessage message of
+  Just (ChannelMsg user msg) ->
+    return . maybeToList . map (toCommand . ChannelMsgReply . (++ nickToText (userNick user)) . (++ " "))
+      . find (== clean msg) $ greetings
+  _                          -> return []
   where
     greetings = [ "hi", "hello", "hey", "sup", "bye"
                 , "good morning", "good evening", "good night" ]
-greeter _ = return []
 
-welcomer :: MonadMsgHandler m => Message -> m [Command]
-welcomer Message { msgDetails = JoinMsg { .. }, .. } = do
-  BotConfig { .. } <- ask
-  if userNick user /= botNick
-    then return [ChannelMsgReply $ "welcome back " ++ nickToText (userNick user)]
-    else return []
-
-welcomer _ = return []
+welcomer :: MonadMsgHandler m => FullMessage -> m [Command]
+welcomer FullMessage { .. } = case fromMessage message of
+  Just (JoinMsg user) -> do
+    BotConfig { .. } <- ask
+    return [toCommand . ChannelMsgReply $ "welcome back " ++ nickToText (userNick user)
+            | userNick user /= botNick]
+  _                   -> return []
 
 

@@ -42,10 +42,11 @@ issueToken acid user = do
 
 -- handler
 
-authMessage :: MonadMsgHandler m => IORef (AcidState Auth) -> Message ->  m [Command]
-authMessage state Message { msgDetails = PrivMsg { .. }, .. }
-  | "token" `isPrefixOf` msg = map (singleton . PrivMsgReply user) . io $
-      readIORef state >>= flip issueToken (userNick user)
+authMessage :: MonadMsgHandler m => IORef (AcidState Auth) -> FullMessage ->  m [Command]
+authMessage state FullMessage { .. }
+  | Just (PrivMsg user msg) <- fromMessage message
+  , "token" `isPrefixOf` msg =
+      map (singleton . toCommand . PrivMsgReply user) . io $ readIORef state >>= flip issueToken (userNick user)
 authMessage _ _ = return []
 
 stopAuth :: MonadMsgHandler m => IORef (AcidState Auth) -> m ()
@@ -54,7 +55,7 @@ stopAuth state = io $ do
   createArchive acid
   createCheckpointAndClose acid
 
-authEvent :: MonadMsgHandler m => IORef (AcidState Auth) -> SomeEvent -> m EventResponse
+authEvent :: MonadMsgHandler m => IORef (AcidState Auth) -> Event -> m EventResponse
 authEvent state event = case fromEvent event of
   Just (AuthEvent user token reply, _) -> io $ do
     acid <- readIORef state

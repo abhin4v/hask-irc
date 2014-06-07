@@ -4,10 +4,10 @@
 module Network.IRC.Handlers.Auth.Types where
 
 import ClassyPrelude
-import Data.Data      (Data)
-import Data.SafeCopy  (base, deriveSafeCopy)
+import Data.Data     (Data)
+import Data.SafeCopy (base, deriveSafeCopy)
 
-import Network.IRC.Types hiding (user)
+import Network.IRC.Types
 
 type Token   = Text
 newtype Auth = Auth { auth :: Map Nick Token } deriving (Eq, Show, Data, Typeable)
@@ -19,7 +19,7 @@ $(deriveSafeCopy 0 'base ''Auth)
 
 data AuthEvent = AuthEvent Nick Token (MVar Bool) deriving (Eq, Typeable)
 
-instance Event AuthEvent
+instance EventC AuthEvent
 
 instance Show AuthEvent where
   show (AuthEvent nick token _) =

@@ -47,20 +47,21 @@ saveTell acid = update acid . SaveTellQ
 
 newtype TellState = TellState { acid :: AcidState Tells }
 
-tellMsg :: MonadMsgHandler m => Chan SomeEvent -> IORef TellState -> Message ->  m [Command]
-tellMsg eventChan state Message { msgDetails = ChannelMsg { .. }, .. }
-  | command == "!tell"
+tellMsg :: MonadMsgHandler m => Chan Event -> IORef TellState -> FullMessage ->  m [Command]
+tellMsg eventChan state FullMessage { .. }
+  | Just (ChannelMsg (User { .. }) msg) <- fromMessage message
+  , command msg == "!tell"
   , args <- drop 1 . words $ msg
   , length args >= 2             = io $ do
       TellState { .. } <- readIORef state
       reps <- if "<" `isPrefixOf` headEx args
         then do -- multi tell
-          let (nicks, message) =
+          let (nicks, tell) =
                 (parseNicks *** (strip . drop 1)) . break (== '>') . drop 1 . unwords $ args
-          if null message
+          if null tell
             then return []
             else do
-              res <- forM nicks $ \nick -> handleTell acid nick message
+              res <- forM nicks $ \nick -> handleTell acid nick tell
               let (fails, passes) = partitionEithers res
               let reps = (if null fails then [] else ["Unknown nicks: " ++ intercalate ", " fails]) ++
                            (if null passes then [] else
@@ -68,33 +69,35 @@ tellMsg eventChan state Message { msgDetails = ChannelMsg { .. }, .. }
               return reps
         else do -- single tell
           let nick = Nick . headEx $ args
-          let message = strip . unwords . drop 1 $ args
-          if null message
+          let tell = strip . unwords . drop 1 $ args
+          if null tell
             then return []
             else do
-              res <- handleTell acid nick message
+              res <- handleTell acid nick tell
               let rep = case res of
                           Left _  -> "Unknown nick: " ++ nickToText nick
                           Right _ -> "Message noted and will be passed on to " ++ nickToText nick
               return [rep]
-      tells <- getTellsToDeliver
-      return . map textToReply $ (reps ++ tells)
-  | otherwise                    = io $ map (map textToReply) getTellsToDeliver
+      tells <- getTellsToDeliver userNick
+      return . map (textToReply userNick) $ (reps ++ tells)
+  | Just (ChannelMsg (User { .. }) _) <- fromMessage message =
+      io $ map (map (textToReply userNick)) $ getTellsToDeliver userNick
+  | otherwise = return []
   where
-    command = clean . fromMaybe "" $ headMay . words $ msg
+    command msg = clean . fromMaybe "" . headMay . words $ msg
 
     parseNicks = ordNub . map Nick . filter (not . null) . split (\x -> x == ' ' || x == ',')
 
-    textToReply t = ChannelMsgReply $ nickToText (userNick user) ++ ": " ++ t
+    textToReply nick t = toCommand . ChannelMsgReply $ nickToText nick ++ ": " ++ t
 
     tellToMsg Tell { .. } =
       relativeTime tellCreatedOn msgTime ++ " " ++ nickToText tellFromNick ++ " said: " ++ tellContent
 
-    newTell canonicalNick = Tell (-1) (userNick user) canonicalNick Nothing NewTell msgTime Nothing
+    newTell nick canonicalNick = Tell (-1) nick canonicalNick Nothing NewTell msgTime Nothing
 
-    getTellsToDeliver = io $ do
+    getTellsToDeliver nick = io $ do
       TellState { .. } <- readIORef state
-      mcn              <- getCanonicalNick eventChan $ userNick user
+      mcn              <- getCanonicalNick eventChan nick
       case mcn of
         Nothing            -> return []
         Just canonicalNick -> do
@@ -103,19 +106,17 @@ tellMsg eventChan state Message { msgDetails = ChannelMsg { .. }, .. }
             saveTell acid tell{ tellStatus = DeliveredTell, tellDeliveredOn = Just msgTime }
             return . tellToMsg $ tell
 
-    handleTell acid nick message = do
+    handleTell acid nick tell = do
       mcn <- getCanonicalNick eventChan nick
       case mcn of
         Nothing            -> return . Left . nickToText $ nick
         Just canonicalNick ->
-          saveTell acid (newTell canonicalNick message) >> (return . Right . nickToText $ nick)
+          saveTell acid (newTell nick canonicalNick tell) >> (return . Right . nickToText $ nick)
 
-tellMsg _ _ _ = return []
-
-tellEvent :: MonadMsgHandler m => Chan SomeEvent -> IORef TellState -> SomeEvent -> m EventResponse
+tellEvent :: MonadMsgHandler m => Chan Event -> IORef TellState -> Event -> m EventResponse
 tellEvent eventChan state event = case fromEvent event of
   Just (TellRequest user message, evTime) -> do
-    tellMsg eventChan state . Message evTime "" $ ChannelMsg user message
+    tellMsg eventChan state . FullMessage evTime "" . toMessage $ ChannelMsg user message
     return RespNothing
   _                                       -> return RespNothing
 

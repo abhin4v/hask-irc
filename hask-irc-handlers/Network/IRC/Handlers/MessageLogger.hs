@@ -73,17 +73,25 @@ withLogFile action state = do
 
   return []
 
-messageLogger :: MonadMsgHandler m => Message -> IORef LoggerState -> m [Command]
-messageLogger Message { .. } = case msgDetails of
-  ChannelMsg { .. } -> log "<{}> {}"                  [nick user, msg]
-  ActionMsg { .. }  -> log "<{}> {} {}"               [nick user, nick user, msg]
-  KickMsg { .. }    -> log "** {} KICKED {} :{}"      [nick user, nickToText kickedNick, msg]
-  JoinMsg { .. }    -> log "** {} JOINED"             [nick user]
-  PartMsg { .. }    -> log "** {} PARTED :{}"         [nick user, msg]
-  QuitMsg { .. }    -> log "** {} QUIT :{}"           [nick user, msg]
-  NickMsg { .. }    -> log "** {} CHANGED NICK TO {}" [nick user, nickToText newNick]
-  NamesMsg { .. }   -> log "** USERS {}"              [unwords . map nickToText $ nicks]
-  _                 -> const $ return []
+messageLogger :: MonadMsgHandler m => FullMessage -> IORef LoggerState -> m [Command]
+messageLogger FullMessage { .. }
+  | Just (ChannelMsg user msg) <- fromMessage message =
+      log "<{}> {}" [nick user, msg]
+  | Just (ActionMsg user msg) <- fromMessage message =
+      log "<{}> {} {}" [nick user, nick user, msg]
+  | Just (KickMsg user kickedNick msg) <- fromMessage message =
+      log "** {} KICKED {} :{}" [nick user, nickToText kickedNick, msg]
+  | Just (JoinMsg user) <- fromMessage message =
+      log "** {} JOINED" [nick user]
+  | Just (PartMsg user msg) <- fromMessage message =
+      log "** {} PARTED :{}" [nick user, msg]
+  | Just (QuitMsg user msg) <- fromMessage message =
+      log "** {} QUIT :{}" [nick user, msg]
+  | Just (NickMsg user newNick) <- fromMessage message =
+      log "** {} CHANGED NICK TO {}" [nick user, nickToText newNick]
+  | Just (NamesMsg nicks) <- fromMessage message =
+      log "** USERS {}" [unwords . map nickToText $ nicks]
+  | otherwise = const $ return []
   where
     nick = nickToText . userNick
 

@@ -38,14 +38,15 @@ instance FromJSON Song where
     parseJSON a | a == emptyArray = return NoSong
     parseJSON _                   = mempty
 
-songSearch :: MonadMsgHandler m => Message -> m [Command]
-songSearch Message { msgDetails = ChannelMsg { .. }, .. }
-  | "!m " `isPrefixOf` msg = do
+songSearch :: MonadMsgHandler m => FullMessage -> m [Command]
+songSearch FullMessage { .. }
+  | Just (ChannelMsg _ msg) <- fromMessage message
+  , "!m " `isPrefixOf` msg = do
       BotConfig { .. } <- ask
       liftIO $ do
         let query = strip . drop 3 $ msg
         mApiKey <- CF.lookup config "songsearch.tinysong_apikey"
-        map (singleton . ChannelMsgReply) $ case mApiKey of
+        map (singleton . toCommand . ChannelMsgReply) $ case mApiKey of
           Nothing     -> do
             errorM "tinysong api key not found in config"
             return $ "Error while searching for " ++ query
@@ -54,10 +55,11 @@ songSearch Message { msgDetails = ChannelMsg { .. }, .. }
                           ++ "?format=json&key=" ++ apiKey
 
             result <- try $ curlAesonGet apiUrl >>= evaluate
-            return $ case result of
-              Left (_ :: CurlAesonException) -> "Error while searching for " ++ query
-              Right song                     -> case song of
+            case result of
+              Left (e :: CurlAesonException) -> do
+                errorM . unpack $ "Error while searching for " ++ query ++ ": " ++ pack (show e)
+                return $ "Error while searching for " ++ query
+              Right song                     -> return $ case song of
                 Song { .. } -> "Listen to " ++ artist ++ " - " ++ name ++ " at " ++ url
                 NoSong      -> "No song found for: " ++ query
   | otherwise              = return []
-songSearch _ = return []
