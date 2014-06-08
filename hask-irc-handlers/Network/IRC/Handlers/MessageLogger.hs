@@ -75,21 +75,21 @@ withLogFile action state = do
 
 messageLogger :: MonadMsgHandler m => FullMessage -> IORef LoggerState -> m [Command]
 messageLogger FullMessage { .. }
-  | Just (ChannelMsg user msg) <- fromMessage message =
+  | Just (ChannelMsg user msg)         <- fromMessage message =
       log "<{}> {}" [nick user, msg]
-  | Just (ActionMsg user msg) <- fromMessage message =
+  | Just (ActionMsg user msg)          <- fromMessage message =
       log "<{}> {} {}" [nick user, nick user, msg]
   | Just (KickMsg user kickedNick msg) <- fromMessage message =
       log "** {} KICKED {} :{}" [nick user, nickToText kickedNick, msg]
-  | Just (JoinMsg user) <- fromMessage message =
+  | Just (JoinMsg user)                <- fromMessage message =
       log "** {} JOINED" [nick user]
-  | Just (PartMsg user msg) <- fromMessage message =
+  | Just (PartMsg user msg)            <- fromMessage message =
       log "** {} PARTED :{}" [nick user, msg]
-  | Just (QuitMsg user msg) <- fromMessage message =
+  | Just (QuitMsg user msg)            <- fromMessage message =
       log "** {} QUIT :{}" [nick user, msg]
-  | Just (NickMsg user newNick) <- fromMessage message =
+  | Just (NickMsg user newNick)        <- fromMessage message =
       log "** {} CHANGED NICK TO {}" [nick user, nickToText newNick]
-  | Just (NamesMsg nicks) <- fromMessage message =
+  | Just (NamesMsg nicks)              <- fromMessage message =
       log "** USERS {}" [unwords . map nickToText $ nicks]
   | otherwise = const $ return []
   where

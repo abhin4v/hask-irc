@@ -200,11 +200,16 @@ data MessageParseResult =
   | Reject                           -- ^ Returned if a message line cannot be parsed by a particular parser.
   deriving (Eq, Show)
 
--- | A message parser.
+-- | A message parser used for parsing text lines from the server to 'Message's.
 data MessageParser = MessageParser
   { msgParserId :: !MessageParserId
   , msgParser   :: !(BotConfig -> UTCTime -> Text -> [MessagePart] -> MessageParseResult)
   }
+
+-- ** Command Formatting
+
+-- | A command formatter which optinally formats commands to texts which are then send to the server.
+type CommandFormatter = BotConfig -> Command -> Maybe Text
 
 -- ** Events
 
@@ -274,6 +279,8 @@ data BotConfig = BotConfig
   , msgHandlerMakers :: ![MsgHandlerMaker]
   -- | A list of extra message parsers. Note that these parsers will always be called after the built-in ones.
   , msgParsers       :: ![MessageParser]
+  -- | A list of extra command formatters. Note that these formatters will always be called after the built-in ones.
+  , cmdFormatters    :: ![CommandFormatter]
   -- | All the bot configuration so that message handlers can lookup their own specific configs.
   , config           :: !Config
   }
@@ -285,6 +292,18 @@ instance Show BotConfig where
                           "nick = "     ++ show botNick    ++ "\n" ++
                           "timeout = "  ++ show botTimeout ++ "\n" ++
                           "handlers = " ++ show (mapKeys msgHandlerInfo)
+
+-- | Creates a new bot config with some fields as empty.
+newBotConfig :: Text                               -- ^ server
+             -> Int                                -- ^ port
+             -> Text                               -- ^ channel
+             -> Nick                               -- ^ botNick
+             -> Int                                -- ^ botTimeout
+             -> Map MsgHandlerName (Map Text Text) -- ^ msgHandlerInfo
+             -> Config                             -- ^ config
+             -> BotConfig
+newBotConfig server port channel botNick botTimeout msgHandlerInfo =
+  BotConfig server port channel botNick botTimeout msgHandlerInfo [] [] []
 
 -- | The bot.
 data Bot = Bot

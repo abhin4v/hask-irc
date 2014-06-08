@@ -48,6 +48,8 @@ module Network.IRC.Types
   , MessagePart (..)
   , MessageParseResult (..)
   , MessageParser (..)
+  -- * Command Formatting
+  , CommandFormatter
   -- * Events
   , EventC (..)
   , Event
@@ -55,9 +57,10 @@ module Network.IRC.Types
   , QuitEvent(..)
   -- * Bot
   , BotConfig (..)
+  , newBotConfig
   , Bot (..)
   , BotStatus (..)
-  -- * Message handlers
+  -- * Message Handlers
   , MsgHandlerName
   , MonadMsgHandler
   , MsgHandler (..)

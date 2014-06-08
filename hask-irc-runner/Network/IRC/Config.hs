@@ -23,16 +23,15 @@ loadBotConfig configFile = do
       eBotConfig <- try $ do
         handlers :: [Text] <- CF.require cfg "msghandlers"
         let handlerInfo = foldl' (\m h -> insertMap h mempty m) mempty handlers
-        BotConfig                          <$>
-          CF.require cfg "server"          <*>
-          CF.require cfg "port"            <*>
-          CF.require cfg "channel"         <*>
-          (Nick <$> CF.require cfg "nick") <*>
-          CF.require cfg "timeout"         <*>
-          pure handlerInfo                 <*>
-          pure allMsgHandlerMakers         <*>
-          pure []                          <*>
-          pure cfg
+        botConfig <- newBotConfig                       <$>
+                       CF.require cfg "server"          <*>
+                       CF.require cfg "port"            <*>
+                       CF.require cfg "channel"         <*>
+                       (Nick <$> CF.require cfg "nick") <*>
+                       CF.require cfg "timeout"         <*>
+                       pure handlerInfo                 <*>
+                       pure cfg
+        return botConfig { msgHandlerMakers = allMsgHandlerMakers }
 
       case eBotConfig of
         Left (KeyError k) -> error $ "Error while reading key from config: " ++ unpack k

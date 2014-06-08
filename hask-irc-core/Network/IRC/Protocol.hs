@@ -1,25 +1,23 @@
 module Network.IRC.Protocol
   ( MessagePart (..)
   , parseLine
-  , lineFromCommand) where
+  , formatCommand) where
 
 import ClassyPrelude
-import Data.List ((!!))
-import Data.Text (strip)
+import Data.Foldable (msum)
+import Data.List     ((!!))
+import Data.Text     (strip)
 
 import Network.IRC.Types
 
 parseLine :: BotConfig -> UTCTime -> Text -> [MessagePart] -> (Maybe FullMessage, [MessagePart])
 parseLine botConfig@BotConfig { .. } time line msgParts =
-  fromMaybe (Nothing, msgParts) . flip (`foldl'` Nothing) parsers $ \parseResult MessageParser { .. } ->
-    case parseResult of
-      Just _  -> parseResult
-      Nothing -> let
-        (parserMsgParts, otherParserMsgParts) = partition ((msgParserId ==) . msgPartParserId) msgParts
-        in case msgParser botConfig time line parserMsgParts of
-             Reject                  -> Nothing
-             Partial msgParts'       -> Just (Nothing, msgParts' ++ otherParserMsgParts)
-             Done message' msgParts' -> Just (Just message', msgParts' ++ otherParserMsgParts)
+  fromMaybe (Nothing, msgParts) . msum . flip map parsers $ \MessageParser { .. } -> let
+    (parserMsgParts, otherParserMsgParts) = partition ((msgParserId ==) . msgPartParserId) msgParts
+    in case msgParser botConfig time line parserMsgParts of
+         Reject                  -> Nothing
+         Partial msgParts'       -> Just (Nothing, msgParts' ++ otherParserMsgParts)
+         Done message' msgParts' -> Just (Just message', msgParts' ++ otherParserMsgParts)
   where
     parsers = [pingParser, namesParser, lineParser] ++ msgParsers ++ [defaultParser]
 
@@ -95,8 +93,12 @@ namesParser = MessageParser "names" go
         namesNicks line' =
           map (Nick . stripNickPrefix) . words . drop 1 . unwords . drop 5 . words $ line'
 
-lineFromCommand :: BotConfig -> Command -> Maybe Text
-lineFromCommand BotConfig { .. } command
+formatCommand :: CommandFormatter
+formatCommand botConfig@BotConfig { .. } command =
+  msum . map (\formatter -> formatter botConfig command) $ defaultCommandFormatter : cmdFormatters
+
+defaultCommandFormatter :: CommandFormatter
+defaultCommandFormatter BotConfig { .. } command
   | Just (PongCmd msg)                    <- fromCommand command = Just $ "PONG :" ++ msg
   | Just (PingCmd msg)                    <- fromCommand command = Just $ "PING :" ++ msg
   | Just NickCmd                          <- fromCommand command = Just $ "NICK " ++ botNick'

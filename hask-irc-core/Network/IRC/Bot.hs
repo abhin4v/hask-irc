@@ -48,7 +48,7 @@ readLine = readChan
 sendCommandLoop :: Channel Command -> Bot -> IO ()
 sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
   cmd       <- readChan commandChan
-  let mline = lineFromCommand botConfig cmd
+  let mline = formatCommand botConfig cmd
   handle (\(e :: SomeException) ->
             errorM ("Error while writing to connection: " ++ show e) >> latchIt latch) $ do
     whenJust mline $ \line -> do
