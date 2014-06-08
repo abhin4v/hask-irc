@@ -16,22 +16,23 @@ instance Configured a => Configured [a] where
 
 loadBotConfig :: String -> IO BotConfig
 loadBotConfig configFile = do
-  eCfg <- try $ CF.load [CF.Required configFile]
-  case eCfg of
+  eConfig <- try $ CF.load [CF.Required configFile]
+  case eConfig of
     Left (ParseError _ _) -> error "Error while loading config"
-    Right cfg             -> do
+    Right config             -> do
       eBotConfig <- try $ do
-        handlers :: [Text] <- CF.require cfg "msghandlers"
+        handlers :: [Text] <- CF.require config "msghandlers"
         let handlerInfo = foldl' (\m h -> insertMap h mempty m) mempty handlers
-        botConfig <- newBotConfig                       <$>
-                       CF.require cfg "server"          <*>
-                       CF.require cfg "port"            <*>
-                       CF.require cfg "channel"         <*>
-                       (Nick <$> CF.require cfg "nick") <*>
-                       CF.require cfg "timeout"         <*>
-                       pure handlerInfo                 <*>
-                       pure cfg
-        return botConfig { msgHandlerMakers = allMsgHandlerMakers }
+        botConfig <- newBotConfig                          <$>
+                       CF.require config "server"          <*>
+                       CF.require config "port"            <*>
+                       CF.require config "channel"         <*>
+                       (Nick <$> CF.require config "nick") <*>
+                       CF.require config "timeout"
+        return botConfig { msgHandlerInfo   = handlerInfo
+                         , msgHandlerMakers = allMsgHandlerMakers
+                         , config           = config
+                         }
 
       case eBotConfig of
         Left (KeyError k) -> error $ "Error while reading key from config: " ++ unpack k

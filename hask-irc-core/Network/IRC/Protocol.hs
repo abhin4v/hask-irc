@@ -12,8 +12,8 @@ import Network.IRC.Types
 
 parseLine :: BotConfig -> UTCTime -> Text -> [MessagePart] -> (Maybe FullMessage, [MessagePart])
 parseLine botConfig@BotConfig { .. } time line msgParts =
-  fromMaybe (Nothing, msgParts) . msum . flip map parsers $ \MessageParser { .. } -> let
-    (parserMsgParts, otherParserMsgParts) = partition ((msgParserId ==) . msgPartParserId) msgParts
+  fromMaybe (Nothing, msgParts) . msum . flip map parsers $ \MessageParser { .. } ->
+    let (parserMsgParts, otherParserMsgParts) = partition ((msgParserId ==) . msgPartParserId) msgParts
     in case msgParser botConfig time line parserMsgParts of
          Reject                  -> Nothing
          Partial msgParts'       -> Just (Nothing, msgParts' ++ otherParserMsgParts)
@@ -31,11 +31,11 @@ pingParser = MessageParser "ping" go
 parseMsgLine :: Text -> ([Text], Text, Text, Text, Text)
 parseMsgLine line = (splits, command, source, target, message)
   where
-    splits      = words line
-    command     = splits !! 1
-    source      = drop 1 $ splits !! 0
-    target      = splits !! 2
-    message     = strip . drop 1 . unwords . drop 3 $ splits
+    splits  = words line
+    command = splits !! 1
+    source  = drop 1 $ splits !! 0
+    target  = splits !! 2
+    message = strip . drop 1 . unwords . drop 3 $ splits
 
 lineParser :: MessageParser
 lineParser = MessageParser "line" go
@@ -111,6 +111,6 @@ defaultCommandFormatter BotConfig { .. } command
   | Just (PrivMsgReply (User { .. }) msg) <- fromCommand command =
       Just $ "PRIVMSG " ++ nickToText userNick ++ " :" ++ msg
   | Just NamesCmd                         <- fromCommand command = Just $ "NAMES " ++ channel
-  | otherwise = Nothing
+  | otherwise                                                    = Nothing
   where
     botNick' = nickToText botNick

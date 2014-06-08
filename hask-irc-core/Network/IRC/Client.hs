@@ -31,6 +31,7 @@ import qualified Network.IRC.Handlers.Core as Core
 
 import Network.IRC.Bot
 import Network.IRC.Internal.Types
+import Network.IRC.Types
 import Network.IRC.Util
 
 $(deriveLoggers "HSL" [HSL.DEBUG, HSL.ERROR])

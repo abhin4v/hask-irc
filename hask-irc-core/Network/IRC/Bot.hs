@@ -27,6 +27,7 @@ import System.Log.Logger.TH      (deriveLoggers)
 
 import Network.IRC.Internal.Types
 import Network.IRC.Protocol
+import Network.IRC.Types
 import Network.IRC.Util
 
 $(deriveLoggers "HSL" [HSL.DEBUG, HSL.INFO, HSL.ERROR])

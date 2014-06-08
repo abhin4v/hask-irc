@@ -74,7 +74,10 @@ library
                        Network.IRC.Client,
                        Network.IRC.Util
 
-  other-modules:       Network.IRC.Internal.Types,
+  other-modules:       Network.IRC.Internal.Command.Types,
+                       Network.IRC.Internal.Event.Types,
+                       Network.IRC.Internal.Message.Types,
+                       Network.IRC.Internal.Types,
                        Network.IRC.Protocol,
                        Network.IRC.Bot,
                        Network.IRC.Handlers.Core

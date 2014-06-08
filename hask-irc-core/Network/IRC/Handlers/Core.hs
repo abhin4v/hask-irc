@@ -53,4 +53,4 @@ help FullMessage { .. } = case fromMessage message of
         let mHelp   = find ((\c -> c == command || c == cons '!' command) . fst)
                       . concatMap mapToList . mapValues $ msgHandlerInfo
         return [toCommand . ChannelMsgReply $ maybe ("No such command found: " ++ command) snd mHelp]
-  _ -> return []
+  _                            -> return []

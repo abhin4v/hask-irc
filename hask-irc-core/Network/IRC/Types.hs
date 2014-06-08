@@ -68,4 +68,8 @@ module Network.IRC.Types
   , MsgHandlerMaker (..)
   ) where
 
+import Network.IRC.Internal.Command.Types
+import Network.IRC.Internal.Event.Types
+import Network.IRC.Internal.Message.Types
 import Network.IRC.Internal.Types
+
