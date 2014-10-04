@@ -15,7 +15,7 @@ module Network.IRC.Client (runBot) where
 import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
-import Control.Concurrent.Lifted (fork, newChan, threadDelay, myThreadId, Chan)
+import Control.Concurrent.Lifted (fork, threadDelay, myThreadId)
 import Control.Exception.Lifted  (throwTo, AsyncException (UserInterrupt))
 import Network                   (PortID (PortNumber), connectTo, withSocketsDo)
 import System.IO                 (hSetBuffering, BufferMode(..))
@@ -27,93 +27,103 @@ import System.Log.Logger         (Priority (..), updateGlobalLogger, rootLoggerN
 import System.Log.Logger.TH      (deriveLoggers)
 import System.Posix.Signals      (installHandler, sigINT, sigTERM, Handler (Catch))
 
-import qualified Network.IRC.Handlers.Core as Core
-
 import Network.IRC.Bot
 import Network.IRC.Internal.Types
+import Network.IRC.MessageBus
 import Network.IRC.Types
+import Network.IRC.Handlers.Core
 import Network.IRC.Util
 
 $(deriveLoggers "HSL" [HSL.DEBUG, HSL.ERROR])
 
-coreMsgHandlerNames :: [MsgHandlerName]
-coreMsgHandlerNames = ["pingpong", "help"]
+data ConnectionResource = ConnectionResource
+  { bot                :: Bot
+  , botStatus          :: MVar BotStatus
+  , inChannel          :: MessageChannel In
+  , mainMsgChannel     :: MessageChannel Message
+  , cmdMsgChannel      :: MessageChannel Message
+  , handlerMsgChannels :: [MessageChannel Message]
+  }
 
-connect :: BotConfig -> IO (Bot, MVar BotStatus, Channel Line, Channel Command, Channel Event)
+connect :: BotConfig -> IO ConnectionResource
 connect botConfig@BotConfig { .. } = do
   debugM "Connecting ..."
   socket <- connectToWithRetry
   hSetBuffering socket LineBuffering
   debugM "Connected"
 
-  lineChan        <- newChannel
-  commandChan     <- newChannel
-  eventChan       <- newChannel
-  mvBotStatus     <- newMVar Connected
-  msgHandlers     <- loadMsgHandlers (fst eventChan)
-  msgHandlerInfo' <- foldM (\m (hn, h) -> getHelp h botConfig >>= \hm -> return $ insertMap hn hm m)
-                       mempty (mapToList msgHandlers)
-  let botConfig'  = botConfig { msgHandlerInfo = msgHandlerInfo'}
-  return (Bot botConfig' socket msgHandlers, mvBotStatus, lineChan, commandChan, eventChan)
+  messageBus       <- newMessageBus
+  inBus            <- newMessageBus
+  mvBotStatus      <- newMVar Connected
+
+  inChannel        <- newMessageChannel inBus
+  mainMsgChannel   <- newMessageChannel messageBus
+  cmdMsgChannel    <- newMessageChannel messageBus
+
+  msgHandlersChans <- loadMsgHandlers messageBus
+  msgHandlerInfo'  <- foldM (\m (hn, (h, _)) -> getHelp h botConfig >>= \hm -> return $ insertMap hn hm m)
+                        mempty (mapToList msgHandlersChans)
+
+  let botConfig'         = botConfig { msgHandlerInfo = msgHandlerInfo'}
+  let msgHandlerChannels = map snd (mapValues msgHandlersChans)
+  let msgHandlers        = map fst msgHandlersChans
+
+  return $ ConnectionResource
+            (Bot botConfig' socket msgHandlers) mvBotStatus
+            inChannel mainMsgChannel cmdMsgChannel msgHandlerChannels
   where
-    connectToWithRetry = connectTo (unpack server) (PortNumber (fromIntegral port))
+    connectToWithRetry = connectTo (unpack botServer) (PortNumber (fromIntegral botPort))
                            `catch` (\(e :: SomeException) -> do
                                       errorM ("Error while connecting: " ++ show e ++ ". Waiting.")
                                       threadDelay (5 * oneSec)
                                       connectToWithRetry)
 
-    newChannel = (,) <$> newChan <*> newEmptyMVar
+    mkMsgHandler name messageBus =
+      case lookup name msgHandlerMakers of
+        Nothing    -> return Nothing
+        Just maker -> do
+          messageChannel <- newMessageChannel messageBus
+          handler        <- msgHandlerMaker maker botConfig messageChannel
+          return $ Just (handler, messageChannel)
 
-    mkMsgHandler :: Chan Event -> MsgHandlerName -> IO (Maybe MsgHandler)
-    mkMsgHandler eventChan name =
-      flip (`foldM` Nothing) msgHandlerMakers $ \finalHandler handler ->
-        case finalHandler of
-          Just _  -> return finalHandler
-          Nothing -> msgHandlerMaker handler botConfig eventChan name
-
-    loadMsgHandlers eventChan =
+    loadMsgHandlers messageBus =
       flip (`foldM` mempty) (mapKeys msgHandlerInfo) $ \hMap msgHandlerName -> do
         debugM . unpack $ "Loading msg handler: " ++ msgHandlerName
-        mMsgHandler <- mkMsgHandler eventChan msgHandlerName
+        mMsgHandler <- mkMsgHandler msgHandlerName messageBus
         case mMsgHandler of
-          Nothing         -> do
+          Nothing                   -> do
             debugM . unpack $ "No msg handler found with name: " ++ msgHandlerName
             return hMap
-          Just msgHandler -> return $ insertMap msgHandlerName msgHandler hMap
+          Just msgHandlerAndChannel -> return $ insertMap msgHandlerName msgHandlerAndChannel hMap
 
-disconnect :: (Bot, MVar BotStatus, Channel Line, Channel Command, Channel Event) -> IO ()
-disconnect (Bot { .. }, mvBotStatus, (_, readLatch), (commandChan, sendLatch), (eventChan, eventLatch)) = do
+disconnect :: ConnectionResource -> IO ()
+disconnect ConnectionResource { bot = Bot { .. }, .. } = do
   debugM "Disconnecting ..."
-  sendCommand commandChan $ toCommand QuitCmd
-  awaitLatch sendLatch
-  swapMVar mvBotStatus Disconnected
-  awaitLatch readLatch
-  sendEvent eventChan =<< toEvent QuitEvent
-  awaitLatch eventLatch
+  sendMessage cmdMsgChannel =<< newMessage QuitCmd
+  awaitMessageChannel cmdMsgChannel
 
-  unloadMsgHandlers
+  swapMVar botStatus Disconnected
+  awaitMessageChannel inChannel
+
+  forM_ handlerMsgChannels awaitMessageChannel
   handle (\(_ :: SomeException) -> return ()) $ hClose botSocket
   debugM "Disconnected"
-  where
-    unloadMsgHandlers = forM_ (mapToList msgHandlers) $ \(msgHandlerName, msgHandler) -> do
-      debugM . unpack $ "Unloading msg handler: " ++ msgHandlerName
-      stopMsgHandler msgHandler botConfig
 
 runBotIntenal :: BotConfig -> IO ()
 runBotIntenal botConfig' = withSocketsDo $ do
   status <- run
   case status of
-    Disconnected     -> debugM "Restarting .." >> runBotIntenal botConfig
-    Errored          -> debugM "Restarting .." >> runBotIntenal botConfig
+    Disconnected     -> debugM "Restarting .." >> runBotIntenal botConfigWithCore
+    Errored          -> debugM "Restarting .." >> runBotIntenal botConfigWithCore
     Interrupted      -> return ()
     NickNotAvailable -> return ()
     _                -> error "Unsupported status"
   where
-    botConfig = botConfig' {
+    botConfigWithCore = botConfig' {
       msgHandlerInfo =
         foldl' (\m name -> insertMap name mempty m) mempty
-          (hashNub $ mapKeys (msgHandlerInfo botConfig') ++ coreMsgHandlerNames),
-      msgHandlerMakers = ordNub $ Core.mkMsgHandler : msgHandlerMakers botConfig'
+          (hashNub $ mapKeys (msgHandlerInfo botConfig') ++ mapKeys coreMsgHandlerMakers),
+      msgHandlerMakers = coreMsgHandlerMakers <> msgHandlerMakers botConfig'
     }
 
     handleErrors :: SomeException -> IO BotStatus
@@ -121,18 +131,33 @@ runBotIntenal botConfig' = withSocketsDo $ do
         Just UserInterrupt -> debugM "User interrupt"          >> return Interrupted
         _                  -> debugM ("Exception! " ++ show e) >> return Errored
 
-    run = bracket (connect botConfig) disconnect $
-      \(bot, mvBotStatus, (lineChan, readLatch), (commandChan, sendLatch), eventChannel) ->
+    runHandler botConfig ((msgHandlerName, handler), msgChannel) = receiveMessage msgChannel >>= go
+      where
+        go msg@Message { .. }
+          | Just QuitCmd <- fromMessage message = do
+              debugM . unpack $ "Stopping msg handler: " ++ msgHandlerName
+              stopMsgHandler handler botConfig
+              closeMessageChannel msgChannel
+              return ()
+          | otherwise = do
+              resps <- handleMessage handler botConfig msg
+              forM_ resps $ sendMessage msgChannel
+              runHandler botConfig ((msgHandlerName, handler), msgChannel)
+
+    run = bracket (connect botConfigWithCore) disconnect $
+      \ConnectionResource { .. } ->
         handle handleErrors $ do
+          let Bot { .. } = bot
           debugM $ "Running with config:\n" ++ show botConfig
 
-          sendCommand commandChan $ toCommand NickCmd
-          sendCommand commandChan $ toCommand UserCmd
+          sendMessage cmdMsgChannel =<< newMessage NickCmd
+          sendMessage cmdMsgChannel =<< newMessage UserCmd
 
-          fork $ sendCommandLoop (commandChan, sendLatch) bot
-          fork $ readLineLoop mvBotStatus (lineChan, readLatch) bot oneSec
-          fork $ eventProcessLoop eventChannel lineChan commandChan bot
-          runIRC bot Connected (messageProcessLoop lineChan commandChan)
+          fork $ sendCommandLoop cmdMsgChannel bot
+          fork $ readMessageLoop botStatus inChannel bot oneSec
+          forM_ (zip (mapToList msgHandlers) handlerMsgChannels) $
+            void . fork . runHandler botConfig
+          runIRC bot Connected (messageProcessLoop inChannel mainMsgChannel)
 
 -- | Creates and runs an IRC bot for given the config. This IO action runs forever.
 runBot :: BotConfig -- ^ The bot config used to create the bot.

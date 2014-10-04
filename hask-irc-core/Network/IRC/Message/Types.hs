@@ -4,15 +4,14 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_HADDOCK hide #-}
 
-module Network.IRC.Internal.Message.Types where
+module Network.IRC.Message.Types where
 
 import ClassyPrelude
-import Data.Data                 (Data)
-import Data.SafeCopy             (base, deriveSafeCopy)
-import Data.Typeable             (cast)
-
--- ** IRC Message
+import Data.Data     (Data)
+import Data.SafeCopy (base, deriveSafeCopy)
+import Data.Typeable (cast)
 
 -- | An IRC nick.
 newtype Nick = Nick { nickToText :: Text }
@@ -34,30 +33,35 @@ data User
   } deriving (Show, Eq, Ord)
 
 -- | An IRC message sent from the server to the bot.
-data FullMessage = FullMessage
+data Message = Message
   { msgTime :: !UTCTime  -- ^ The time when the message was received.
   , msgLine :: !Text     -- ^ The raw message line.
-  , message :: Message   -- ^ The details of the parsed message.
+  , message :: MessageW   -- ^ The details of the parsed message.
   } deriving (Show, Eq)
 
 -- | The typeclass for different types of IRC messages.
 class (Typeable msg, Show msg, Eq msg, Ord msg) => MessageC msg where
-  toMessage :: msg -> Message
-  toMessage = Message
+  toMessage :: msg -> MessageW
+  toMessage = MessageW
 
-  fromMessage :: Message -> Maybe msg
-  fromMessage (Message msg) = cast msg
+  fromMessage :: MessageW -> Maybe msg
+  fromMessage (MessageW msg) = cast msg
 
 -- | A wrapper over all types of IRC messages.
-data Message = forall m . MessageC m => Message m deriving (Typeable)
+data MessageW = forall m . MessageC m => MessageW m deriving (Typeable)
 
-instance Show Message where
-  show (Message m) = show m
+instance Show MessageW where
+  show (MessageW m) = show m
 
-instance Eq Message where
-  Message m1 == Message m2 = case cast m1 of
+instance Eq MessageW where
+  MessageW m1 == MessageW m2 = case cast m1 of
     Just m1' -> m1' == m2
     _        -> False
+
+newMessage :: (MessageC msg, MonadIO m) => msg -> m Message
+newMessage msg = do
+  t <- liftIO getCurrentTime
+  return $ Message t "" (toMessage msg)
 
 -- | The internal (non-IRC) message received when the bot is idle.
 data IdleMsg      = IdleMsg deriving (Typeable, Show, Eq, Ord)
@@ -121,3 +125,40 @@ instance MessageC ModeMsg
 data OtherMsg     = OtherMsg { msgSource :: !Text, msgCommand :: !Text, msgTarget :: !Text , msg :: !Text }
                     deriving (Typeable, Show, Eq, Ord)
 instance MessageC OtherMsg
+
+
+-- | A /PING/ command. A 'PongMsg' is expected as a response to this.
+data PingCmd         = PingCmd !Text deriving (Typeable, Show, Eq, Ord)
+instance MessageC PingCmd
+
+-- | A /PONG/ command. Sent in response to a 'PingMsg'.
+data PongCmd         = PongCmd !Text deriving (Typeable, Show, Eq, Ord)
+instance MessageC PongCmd
+
+-- | A /PRIVMSG/ message sent to the channel.
+data ChannelMsgReply = ChannelMsgReply !Text deriving (Typeable, Show, Eq, Ord)
+instance MessageC ChannelMsgReply
+
+-- | A /PRIVMSG/ message sent to a user.
+data PrivMsgReply    = PrivMsgReply !User !Text deriving (Typeable, Show, Eq, Ord)
+instance MessageC PrivMsgReply
+
+-- | A /NICK/ command sent to set the bot's nick.
+data NickCmd         = NickCmd deriving (Typeable, Show, Eq, Ord)
+instance MessageC NickCmd
+
+-- | A /USER/ command sent to identify the bot.
+data UserCmd         = UserCmd deriving (Typeable, Show, Eq, Ord)
+instance MessageC UserCmd
+
+-- | A /JOIN/ command sent to join the channel.
+data JoinCmd         = JoinCmd deriving (Typeable, Show, Eq, Ord)
+instance MessageC JoinCmd
+
+-- | A /QUIT/ command sent to quit the server.
+data QuitCmd         = QuitCmd deriving (Typeable, Show, Eq, Ord)
+instance MessageC QuitCmd
+
+-- | A /NAMES/ command sent to ask for the nicks of the users in the channel.
+data NamesCmd        = NamesCmd deriving (Typeable, Show, Eq, Ord)
+instance MessageC NamesCmd

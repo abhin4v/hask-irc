@@ -17,10 +17,13 @@ emptyAuth = Auth mempty
 
 $(deriveSafeCopy 0 'base ''Auth)
 
-data AuthEvent = AuthEvent Nick Token (MVar Bool) deriving (Eq, Typeable)
+data AuthRequest = AuthRequest Nick Token (MVar Bool) deriving (Eq, Typeable)
 
-instance EventC AuthEvent
+instance MessageC AuthRequest
 
-instance Show AuthEvent where
-  show (AuthEvent nick token _) =
-    "AuthEvent[" ++ unpack (nickToText nick) ++ ", " ++ unpack token ++ "]"
+instance Show AuthRequest where
+  show (AuthRequest nick token _) =
+    "AuthRequest[" ++ unpack (nickToText nick) ++ ", " ++ unpack token ++ "]"
+
+instance Ord AuthRequest where
+  (AuthRequest nick1 _ _) `compare` (AuthRequest nick2 _ _) = nick1 `compare` nick2

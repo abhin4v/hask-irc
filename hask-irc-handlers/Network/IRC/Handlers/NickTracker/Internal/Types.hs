@@ -3,24 +3,23 @@
 module Network.IRC.Handlers.NickTracker.Internal.Types where
 
 import ClassyPrelude
-import Control.Concurrent.Lifted (Chan, writeChan)
-import Data.Data                 (Data)
-import Data.IxSet                (IxSet, Indexable (..), ixSet, ixFun)
-import Data.SafeCopy             (base, deriveSafeCopy)
+import Data.Data     (Data)
+import Data.IxSet    (IxSet, Indexable (..), ixSet, ixFun)
+import Data.SafeCopy (base, deriveSafeCopy)
 
-import Network.IRC.Types
+import Network.IRC
 
 newtype CanonicalNick = CanonicalNick { canonicalNickToText :: Text }
                         deriving (Eq, Ord, Show, Data, Typeable)
 newtype LastSeenOn    = LastSeenOn UTCTime deriving (Eq, Ord, Show, Data, Typeable)
 
-data NickTrack = NickTrack {
-  nick          :: !Nick,
-  canonicalNick :: !CanonicalNick,
-  lastSeenOn    :: !UTCTime,
-  lastMessageOn :: !UTCTime,
-  lastMessage   :: !Text
-} deriving (Eq, Ord, Show, Data, Typeable)
+data NickTrack = NickTrack
+  { nick          :: !Nick
+  , canonicalNick :: !CanonicalNick
+  , lastSeenOn    :: !UTCTime
+  , lastMessageOn :: !UTCTime
+  , lastMessage   :: !Text
+  } deriving (Eq, Ord, Show, Data, Typeable)
 
 instance Indexable NickTrack where
   empty = ixSet [ ixFun $ (: []) . nick
@@ -40,14 +39,17 @@ emptyNickTracking = NickTracking empty
 
 data NickTrackRequest = NickTrackRequest Nick (MVar (Maybe NickTrack)) deriving (Eq, Typeable)
 
-instance EventC NickTrackRequest
+instance MessageC NickTrackRequest
 
 instance Show NickTrackRequest where
   show (NickTrackRequest nick _) = "NickTrackRequest[" ++ unpack (nickToText nick) ++ "]"
 
-getCanonicalNick :: Chan Event -> Nick -> IO (Maybe CanonicalNick)
-getCanonicalNick eventChan nick = do
+instance Ord NickTrackRequest where
+  (NickTrackRequest nick1 _) `compare` (NickTrackRequest nick2 _) = nick1 `compare` nick2
+
+getCanonicalNick :: MessageChannel Message -> Nick -> IO (Maybe CanonicalNick)
+getCanonicalNick messageChannel nick = do
   reply   <- newEmptyMVar
-  request <- toEvent $ NickTrackRequest nick reply
-  writeChan eventChan request
+  request <- newMessage $ NickTrackRequest nick reply
+  sendMessage messageChannel request
   map (map canonicalNick) $ takeMVar reply

@@ -14,7 +14,7 @@ import System.Directory         (createDirectoryIfMissing, getModificationTime, 
 import System.FilePath          (FilePath, (</>), (<.>))
 import System.IO                (openFile, IOMode(..), hSetBuffering, BufferMode(..))
 
-import Network.IRC.Types
+import Network.IRC
 import Network.IRC.Util
 
 type LoggerState = Maybe (Handle, Day)
@@ -22,18 +22,17 @@ type LoggerState = Maybe (Handle, Day)
 messageLoggerMsgHandlerMaker :: MsgHandlerMaker
 messageLoggerMsgHandlerMaker = MsgHandlerMaker "messagelogger" go
   where
-    go botConfig _ "messagelogger" = do
+    go botConfig _ = do
       state <- io $ newIORef Nothing
       initMessageLogger botConfig state
-      return . Just $ newMsgHandler { onMessage = flip messageLogger state
-                                    , onStop    = exitMessageLogger state }
-    go _ _ _                       = return Nothing
+      return $ newMsgHandler { onMessage = flip messageLogger state
+                             , onStop    = exitMessageLogger state }
 
 getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do
   logFileDir <- CF.require config "messagelogger.logdir"
   createDirectoryIfMissing True logFileDir
-  return $ logFileDir </> unpack (channel ++ "-" ++ nickToText botNick) <.> "log"
+  return $ logFileDir </> unpack (botChannel ++ "-" ++ nickToText botNick) <.> "log"
 
 openLogFile :: FilePath -> IO Handle
 openLogFile logFilePath = do
@@ -51,7 +50,7 @@ initMessageLogger botConfig state = do
 exitMessageLogger :: MonadMsgHandler m => IORef LoggerState -> m ()
 exitMessageLogger state = io $ readIORef state >>= flip whenJust (hClose . fst)
 
-withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> IORef LoggerState -> m [Command]
+withLogFile :: MonadMsgHandler m => (Handle -> IO ()) -> IORef LoggerState -> m [Message]
 withLogFile action state = do
   botConfig <- ask
   io $ do
@@ -73,8 +72,8 @@ withLogFile action state = do
 
   return []
 
-messageLogger :: MonadMsgHandler m => FullMessage -> IORef LoggerState -> m [Command]
-messageLogger FullMessage { .. }
+messageLogger :: MonadMsgHandler m => Message -> IORef LoggerState -> m [Message]
+messageLogger Message { .. }
   | Just (ChannelMsg user msg)         <- fromMessage message =
       log "<{}> {}" [nick user, msg]
   | Just (ActionMsg user msg)          <- fromMessage message =
@@ -91,7 +90,8 @@ messageLogger FullMessage { .. }
       log "** {} CHANGED NICK TO {}" [nick user, nickToText newNick]
   | Just (NamesMsg nicks)              <- fromMessage message =
       log "** USERS {}" [unwords . map nickToText $ nicks]
-  | otherwise = const $ return []
+  | otherwise                                                 =
+      const $ return []
   where
     nick = nickToText . userNick
 

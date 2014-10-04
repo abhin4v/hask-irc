@@ -4,7 +4,7 @@ import ClassyPrelude hiding    (getArgs)
 import System.Environment      (getArgs, getProgName)
 import System.Exit             (exitFailure)
 
-import Network.IRC.Client
+import Network.IRC
 import Network.IRC.Config
 
 main :: IO ()

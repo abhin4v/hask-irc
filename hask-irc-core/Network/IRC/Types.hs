@@ -14,8 +14,8 @@ module Network.IRC.Types
     Nick (..)
   , User (..)
   , MessageC (..)
-  , Message
-  , FullMessage (..)
+  , Message (..)
+  , newMessage
   , IdleMsg (..)
   , NickInUseMsg (..)
   , PingMsg (..)
@@ -32,8 +32,6 @@ module Network.IRC.Types
   , ModeMsg (..)
   , OtherMsg (..)
   -- * IRC Commands
-  , CommandC (..)
-  , Command
   , PingCmd (..)
   , PongCmd (..)
   , ChannelMsgReply (..)
@@ -50,11 +48,6 @@ module Network.IRC.Types
   , MessageParser (..)
   -- * Command Formatting
   , CommandFormatter
-  -- * Events
-  , EventC (..)
-  , Event
-  , EventResponse (..)
-  , QuitEvent(..)
   -- * Bot
   , BotConfig (..)
   , newBotConfig
@@ -68,8 +61,5 @@ module Network.IRC.Types
   , MsgHandlerMaker (..)
   ) where
 
-import Network.IRC.Internal.Command.Types
-import Network.IRC.Internal.Event.Types
-import Network.IRC.Internal.Message.Types
+import Network.IRC.Message.Types
 import Network.IRC.Internal.Types
-

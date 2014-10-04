@@ -8,15 +8,13 @@ module Network.IRC.Internal.Types where
 import qualified Data.Configurator as CF
 
 import ClassyPrelude
-import Control.Concurrent.Lifted (Chan)
-import Control.Monad.Base        (MonadBase)
-import Control.Monad.Reader      (ReaderT, MonadReader, runReaderT)
-import Control.Monad.State       (StateT, MonadState, execStateT)
-import Data.Configurator.Types   (Config)
+import Control.Monad.Base      (MonadBase)
+import Control.Monad.Reader    (ReaderT, MonadReader, runReaderT)
+import Control.Monad.State     (StateT, MonadState, execStateT)
+import Data.Configurator.Types (Config)
 
-import Network.IRC.Internal.Command.Types
-import Network.IRC.Internal.Event.Types
-import Network.IRC.Internal.Message.Types
+import Network.IRC.Message.Types
+import Network.IRC.MessageBus
 import Network.IRC.Util
 
 -- ** Message Parsing
@@ -25,17 +23,17 @@ import Network.IRC.Util
 type MessageParserId = Text
 
 -- | A part of a mutlipart message.
-data MessagePart = MessagePart { msgPartParserId   :: !MessageParserId
-                               , msgPartTarget     :: !Text
-                               , msgPartTime       :: !UTCTime
-                               , msgPartLine       :: !Text
+data MessagePart = MessagePart { msgPartParserId :: !MessageParserId
+                               , msgPartTarget   :: !Text
+                               , msgPartTime     :: !UTCTime
+                               , msgPartLine     :: !Text
                                } deriving (Eq, Show)
 
 -- | The result of parsing a message line.
 data MessageParseResult =
-    Done !FullMessage ![MessagePart] -- ^ A fully parsed message and leftover message parts.
-  | Partial ![MessagePart]           -- ^ A partial message with message parts received yet.
-  | Reject                           -- ^ Returned if a message line cannot be parsed by a particular parser.
+    Done !Message ![MessagePart]  -- ^ A fully parsed message and leftover message parts.
+  | Partial ![MessagePart]        -- ^ A partial message with message parts received yet.
+  | Reject                        -- ^ Returned if a message line cannot be parsed by a particular parser.
   deriving (Eq, Show)
 
 -- | A message parser used for parsing text lines from the server to 'Message's.
@@ -47,7 +45,7 @@ data MessageParser = MessageParser
 -- ** Command Formatting
 
 -- | A command formatter which optinally formats commands to texts which are then send to the server.
-type CommandFormatter = BotConfig -> Command -> Maybe Text
+type CommandFormatter = BotConfig -> Message -> Maybe Text
 
 -- ** Bot
 
@@ -58,11 +56,11 @@ type MsgHandlerName = Text
 data BotConfig = BotConfig
   {
   -- | The server to connect to.
-    server           :: !Text
+    botServer        :: !Text
   -- | The port to connect to.
-  , port             :: !Int
+  , botPort          :: !Int
   -- | The channel to join.
-  , channel          :: !Text
+  , botChannel       :: !Text
   -- | Nick of the bot.
   , botNick          :: !Nick
   -- | The timeout in seconds after which bot automatically disconnects and tries to reconnect.
@@ -72,7 +70,7 @@ data BotConfig = BotConfig
   -- by that message handler to the help text of that command.
   , msgHandlerInfo   :: !(Map MsgHandlerName (Map Text Text))
   -- | A list of 'MsgHandlerMaker's which are used to create message handlers for the bot.
-  , msgHandlerMakers :: ![MsgHandlerMaker]
+  , msgHandlerMakers :: !(Map MsgHandlerName MsgHandlerMaker)
   -- | A list of extra message parsers. Note that these parsers will always be called after the built-in ones.
   , msgParsers       :: ![MessageParser]
   -- | A list of extra command formatters. Note that these formatters will always be called after the built-in ones.
@@ -82,22 +80,23 @@ data BotConfig = BotConfig
   }
 
 instance Show BotConfig where
-  show BotConfig { .. } = "BotConfig[ server = "   ++ show server     ++ "\n" ++
-                                     "port = "     ++ show port       ++ "\n" ++
-                                     "channel = "  ++ show channel    ++ "\n" ++
-                                     "nick = "     ++ show botNick    ++ "\n" ++
-                                     "timeout = "  ++ show botTimeout ++ "\n" ++
-                                     "handlers = " ++ show (mapKeys msgHandlerInfo) ++ " ]"
+  show BotConfig { .. } = "BotConfig {"                                  ++ "\n" ++
+                          "server = "   ++ show botServer                ++ "\n" ++
+                          "port = "     ++ show botPort                  ++ "\n" ++
+                          "channel = "  ++ show botChannel               ++ "\n" ++
+                          "nick = "     ++ show botNick                  ++ "\n" ++
+                          "timeout = "  ++ show botTimeout               ++ "\n" ++
+                          "handlers = " ++ show (mapKeys msgHandlerInfo) ++ " }"
 
 -- | Creates a new bot config with essential fields leaving rest fields empty.
-newBotConfig :: Text                               -- ^ server
-             -> Int                                -- ^ port
-             -> Text                               -- ^ channel
-             -> Nick                               -- ^ botNick
-             -> Int                                -- ^ botTimeout
+newBotConfig :: Text       -- ^ server
+             -> Int        -- ^ port
+             -> Text       -- ^ channel
+             -> Nick       -- ^ botNick
+             -> Int        -- ^ botTimeout
              -> BotConfig
 newBotConfig server port channel botNick botTimeout =
-  BotConfig server port channel botNick botTimeout mempty [] [] [] CF.empty
+  BotConfig server port channel botNick botTimeout mempty mempty [] [] CF.empty
 
 -- | The bot.
 data Bot = Bot
@@ -111,15 +110,15 @@ data Bot = Bot
   }
 
 -- | The current status of the bot.
-data BotStatus = Connected                -- ^ Connected to the server
-               | Disconnected             -- ^ Disconnected from the server.
-               | Joined                   -- ^ Joined the channel.
-               | Kicked                   -- ^ Kicked from the channel.
-               | Errored                  -- ^ Some unhandled error happened.
-               | Idle                     -- ^ No communication with the server. The bot is idle.
-                                          -- If the bot stays idle for 'botTimeout' seconds, it disconnects.
-               | Interrupted              -- ^ Interrupted using external signals like SIGINT.
-               | NickNotAvailable         -- ^ Bot's nick already taken on the server.
+data BotStatus = Connected               -- ^ Connected to the server
+               | Disconnected            -- ^ Disconnected from the server.
+               | Joined                  -- ^ Joined the channel.
+               | Kicked                  -- ^ Kicked from the channel.
+               | Errored                 -- ^ Some unhandled error happened.
+               | Idle                    -- ^ No communication with the server. The bot is idle.
+                                         -- If the bot stays idle for 'botTimeout' seconds, it disconnects.
+               | Interrupted             -- ^ Interrupted using external signals like SIGINT.
+               | NickNotAvailable        -- ^ Bot's nick already taken on the server.
                deriving (Show, Eq, Ord)
 
 -- | An IRC action to be run.
@@ -162,23 +161,21 @@ data MsgHandler = MsgHandler
   {
   -- | The action invoked when a message is received. It returns a list of commands in response
   -- to the message which the bot sends to the server.
-    onMessage :: !(forall m . MonadMsgHandler m => FullMessage -> m [Command])
-  -- | The action invoked when an event is triggered. It returns an event resonpse which the bot
-  -- handles according to its type.
-  , onEvent   :: !(forall m . MonadMsgHandler m => Event -> m EventResponse)
+    onMessage   :: !(forall m . MonadMsgHandler m => Message -> m [Message])
+
   -- | The action invoked to stop the message handler.
-  , onStop    :: !(forall m . MonadMsgHandler m => m ())
+  , onStop      :: !(forall m . MonadMsgHandler m => m ())
+
   -- | The action invoked to get the map of the commands supported by the message handler and their help messages.
-  , onHelp    :: !(forall m . MonadMsgHandler m => m (Map Text Text))
+  , handlerHelp :: !(forall m . MonadMsgHandler m => m (Map Text Text))
   }
 
 -- | Creates a new message handler which doesn't do anything.
 newMsgHandler :: MsgHandler
 newMsgHandler = MsgHandler
-  { onMessage = const $ return []
-  , onStop    = return ()
-  , onEvent   = const $ return RespNothing
-  , onHelp    = return mempty
+  { onMessage   = const $ return mempty
+  , onStop      = return ()
+  , handlerHelp = return mempty
   }
 
 -- | A message handler maker which creates a new message handler.
@@ -187,7 +184,7 @@ data MsgHandlerMaker = MsgHandlerMaker
   -- | The name of the message handler.
     msgHandlerName  :: !MsgHandlerName
   -- | The action which is invoked to create a new message handler.
-  , msgHandlerMaker :: !(BotConfig -> Chan Event -> MsgHandlerName -> IO (Maybe MsgHandler))
+  , msgHandlerMaker :: !(BotConfig -> MessageChannel Message -> IO MsgHandler)
   }
 
 instance Eq MsgHandlerMaker where
@@ -198,18 +195,10 @@ instance Ord MsgHandlerMaker where
 -- | Handles a message using a given message handler.
 handleMessage :: MsgHandler    -- ^ The message handler.
               -> BotConfig     -- ^ The bot config.
-              -> FullMessage   -- ^ The message to handle.
-              -> IO [Command]  -- ^ A list of commands to be sent to the server.
+              -> Message   -- ^ The message to handle.
+              -> IO [Message]  -- ^ A list of commands to be sent to the server.
 handleMessage MsgHandler { .. } botConfig =
   flip runReaderT botConfig . _runMsgHandler . onMessage
-
--- | Handles an event using a given message handler.
-handleEvent :: MsgHandler        -- ^ The message handler.
-            -> BotConfig         -- ^ The bot config.
-            -> Event             -- ^ The event to handle.
-            -> IO EventResponse  -- ^ The event response which will be dispatched by the bot.
-handleEvent MsgHandler { .. } botConfig =
-  flip runReaderT botConfig . _runMsgHandler . onEvent
 
 -- | Stops a message handler.
 stopMsgHandler :: MsgHandler    -- ^ The message handler.
@@ -223,4 +212,4 @@ getHelp :: MsgHandler          -- ^ The message handler.
         -> BotConfig           -- ^ The bot config.
         -> IO (Map Text Text)  -- ^ A map of the commands supported by this message handler  to their help messages.
 getHelp MsgHandler { .. } botConfig =
-  flip runReaderT botConfig . _runMsgHandler $ onHelp
+  flip runReaderT botConfig . _runMsgHandler $ handlerHelp

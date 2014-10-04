@@ -6,28 +6,17 @@ module Network.IRC.Util where
 import qualified Data.Text.Format        as TF
 
 import ClassyPrelude
-import Control.Arrow             (Arrow)
-import Control.Concurrent.Lifted (Chan)
-import Control.Monad.Base        (MonadBase)
-import Data.Convertible          (convert)
-import Data.Text                 (strip)
-import Data.Time                 (diffUTCTime)
+import Control.Arrow      (Arrow)
+import Control.Monad.Base (MonadBase)
+import Data.Convertible   (convert)
+import Data.Text          (strip)
+import Data.Time          (diffUTCTime)
 
 oneSec :: Int
 oneSec = 1000000
 
-type Latch = MVar ()
-
-latchIt :: Latch -> IO ()
-latchIt latch = putMVar latch ()
-
-awaitLatch :: Latch -> IO ()
-awaitLatch latch = void $ takeMVar latch
-
-type Channel a = (Chan a, Latch)
-
 mapKeys :: IsMap map => map -> [ContainerKey map]
-mapKeys   = map fst . mapToList
+mapKeys = map fst . mapToList
 
 mapValues :: IsMap map => map -> [MapValue map]
 mapValues = map snd . mapToList
@@ -64,21 +53,21 @@ relativeTime t1 t2 =
 
     period = t1 `diffUTCTime` t2
 
-    ranges = [(year*2,    "{} years",     year)
-             ,(year,      "a year",       0)
-             ,(month*2,   "{} months",    month)
-             ,(month,     "a month",      0)
-             ,(week*2,    "{} weeks",     week)
-             ,(week,      "a week",       0)
-             ,(day*2,     "{} days",      day)
-             ,(day,       "a day",        0)
-             ,(hour*4,    "{} hours",     hour)
-             ,(hour*3,    "a few hours",  0)
-             ,(hour*2,    "{} hours",     hour)
-             ,(hour,      "an hour",      0)
-             ,(minute*31, "{} minutes",   minute)
-             ,(minute*30, "half an hour", 0)
-             ,(minute*2,  "{} minutes",   minute)
-             ,(minute,    "a minute",     0)
-             ,(0,         "{} seconds",   1)
+    ranges = [ (year*2,    "{} years",     year)
+             , (year,      "a year",       0)
+             , (month*2,   "{} months",    month)
+             , (month,     "a month",      0)
+             , (week*2,    "{} weeks",     week)
+             , (week,      "a week",       0)
+             , (day*2,     "{} days",      day)
+             , (day,       "a day",        0)
+             , (hour*4,    "{} hours",     hour)
+             , (hour*3,    "a few hours",  0)
+             , (hour*2,    "{} hours",     hour)
+             , (hour,      "an hour",      0)
+             , (minute*31, "{} minutes",   minute)
+             , (minute*30, "half an hour", 0)
+             , (minute*2,  "{} minutes",   minute)
+             , (minute,    "a minute",     0)
+             , (0,         "{} seconds",   1)
              ]

@@ -13,6 +13,7 @@ allMsgHandlerMakers :: [MsgHandlerMaker]
 allMsgHandlerMakers =
   [ authMsgHandlerMaker
   , greetMsgHandlerMaker
+  , welcomeMsgHandlerMaker
   , messageLoggerMsgHandlerMaker
   , nickTrackerMsgHandlerMaker
   , songSearchMsgHandlerMaker

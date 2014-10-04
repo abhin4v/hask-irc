@@ -10,7 +10,7 @@ import Data.Text     (strip)
 
 import Network.IRC.Types
 
-parseLine :: BotConfig -> UTCTime -> Text -> [MessagePart] -> (Maybe FullMessage, [MessagePart])
+parseLine :: BotConfig -> UTCTime -> Text -> [MessagePart] -> (Maybe Message, [MessagePart])
 parseLine botConfig@BotConfig { .. } time line msgParts =
   fromMaybe (Nothing, msgParts) . msum . flip map parsers $ \MessageParser { .. } ->
     let (parserMsgParts, otherParserMsgParts) = partition ((msgParserId ==) . msgPartParserId) msgParts
@@ -25,7 +25,7 @@ pingParser :: MessageParser
 pingParser = MessageParser "ping" go
   where
     go _ time line _
-      | "PING :" `isPrefixOf` line = Done (FullMessage time line . toMessage . PingMsg . drop 6 $ line) []
+      | "PING :" `isPrefixOf` line = Done (Message time line . toMessage . PingMsg . drop 6 $ line) []
       | otherwise                  = Reject
 
 parseMsgLine :: Text -> ([Text], Text, Text, Text, Text)
@@ -47,17 +47,17 @@ lineParser = MessageParser "line" go
         "QUIT"    -> done $ toMessage $ QuitMsg user quitMessage
         "PART"    -> done $ toMessage $ PartMsg user message
         "KICK"    -> done $ toMessage $ KickMsg user (Nick kicked) kickReason
-        "MODE"    -> done $ toMessage $ if Nick source == botNick
+        "MODE"    -> done $ toMessage $ if Nick target == botNick
                        then ModeMsg Self target message []
                        else ModeMsg user target mode modeArgs
         "NICK"    -> done $ toMessage $ NickMsg user $ Nick (drop 1 target)
         "433"     -> done $ toMessage NickInUseMsg
-        "PRIVMSG" | target /= channel -> done $ toMessage $ PrivMsg user message
-                  | isActionMsg       -> done $ toMessage $ ActionMsg user (initDef . drop 8 $ message)
-                  | otherwise         -> done $ toMessage $ ChannelMsg user message
+        "PRIVMSG" | target /= botChannel -> done $ toMessage $ PrivMsg user message
+                  | isActionMsg          -> done $ toMessage $ ActionMsg user (initDef . drop 8 $ message)
+                  | otherwise            -> done $ toMessage $ ChannelMsg user message
         _         -> Reject
       where
-        done = flip Done [] . FullMessage time line
+        done = flip Done [] . Message time line
 
         (splits, command, source, target, message) = parseMsgLine line
         quitMessage = strip . drop 1 . unwords . drop 2 $ splits
@@ -71,7 +71,7 @@ lineParser = MessageParser "line" go
 defaultParser :: MessageParser
 defaultParser = MessageParser "default" go
   where
-    go _ time line _ = flip Done [] . FullMessage time line $
+    go _ time line _ = flip Done [] . Message time line $
       toMessage $ OtherMsg source command target message
       where
         (_, command, source, target, message) = parseMsgLine line
@@ -85,7 +85,7 @@ namesParser = MessageParser "names" go
         (myMsgParts, otherMsgParts) = partition ((target ==) . msgPartTarget) msgParts
         (nicks, allLines) =  concat *** intercalate "\r\n" . (++ [line])
           $ unzip $ map (\MessagePart { .. } -> (namesNicks msgPartLine, msgPartLine)) myMsgParts
-        in Done (FullMessage time allLines . toMessage $ NamesMsg nicks) otherMsgParts
+        in Done (Message time allLines . toMessage $ NamesMsg nicks) otherMsgParts
       _     -> Reject
       where
         (_ : command : target : _) = words line
@@ -94,23 +94,23 @@ namesParser = MessageParser "names" go
           map (Nick . stripNickPrefix) . words . drop 1 . unwords . drop 5 . words $ line'
 
 formatCommand :: CommandFormatter
-formatCommand botConfig@BotConfig { .. } command =
-  msum . map (\formatter -> formatter botConfig command) $ defaultCommandFormatter : cmdFormatters
+formatCommand botConfig@BotConfig { .. } message =
+  msum . map (\formatter -> formatter botConfig message) $ defaultCommandFormatter : cmdFormatters
 
 defaultCommandFormatter :: CommandFormatter
-defaultCommandFormatter BotConfig { .. } command
-  | Just (PongCmd msg)                    <- fromCommand command = Just $ "PONG :" ++ msg
-  | Just (PingCmd msg)                    <- fromCommand command = Just $ "PING :" ++ msg
-  | Just NickCmd                          <- fromCommand command = Just $ "NICK " ++ botNick'
-  | Just UserCmd                          <- fromCommand command =
+defaultCommandFormatter BotConfig { .. } Message { .. }
+  | Just (PongCmd msg)                    <- fromMessage message = Just $ "PONG :" ++ msg
+  | Just (PingCmd msg)                    <- fromMessage message = Just $ "PING :" ++ msg
+  | Just NickCmd                          <- fromMessage message = Just $ "NICK " ++ botNick'
+  | Just UserCmd                          <- fromMessage message =
       Just $ "USER " ++ botNick' ++ " 0 * :" ++ botNick'
-  | Just JoinCmd                          <- fromCommand command = Just $ "JOIN " ++ channel
-  | Just QuitCmd                          <- fromCommand command = Just "QUIT"
-  | Just (ChannelMsgReply msg)            <- fromCommand command =
-      Just $ "PRIVMSG " ++ channel ++ " :" ++ msg
-  | Just (PrivMsgReply (User { .. }) msg) <- fromCommand command =
+  | Just JoinCmd                          <- fromMessage message = Just $ "JOIN " ++ botChannel
+  | Just QuitCmd                          <- fromMessage message = Just "QUIT"
+  | Just (ChannelMsgReply msg)            <- fromMessage message =
+      Just $ "PRIVMSG " ++ botChannel ++ " :" ++ msg
+  | Just (PrivMsgReply (User { .. }) msg) <- fromMessage message =
       Just $ "PRIVMSG " ++ nickToText userNick ++ " :" ++ msg
-  | Just NamesCmd                         <- fromCommand command = Just $ "NAMES " ++ channel
+  | Just NamesCmd                         <- fromMessage message = Just $ "NAMES " ++ botChannel
   | otherwise                                                    = Nothing
   where
     botNick' = nickToText botNick

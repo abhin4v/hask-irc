@@ -18,8 +18,8 @@ import Data.Convertible     (convert)
 import Data.IxSet           (getOne, (@=))
 import Data.Time            (addUTCTime, NominalDiffTime)
 
+import Network.IRC
 import Network.IRC.Handlers.NickTracker.Internal.Types
-import Network.IRC.Types
 import Network.IRC.Util
 
 -- database
@@ -54,8 +54,8 @@ data NickTrackingState = NickTrackingState { acid            :: AcidState NickTr
                                            , onlineNicks     :: HashSet Nick
                                            , lastRefreshOn   :: UTCTime }
 
-nickTrackerMsg :: MonadMsgHandler m => IORef NickTrackingState -> FullMessage ->  m [Command]
-nickTrackerMsg state FullMessage { .. }
+nickTrackerMsg :: MonadMsgHandler m => IORef NickTrackingState -> Message ->  m [Message]
+nickTrackerMsg state Message { .. }
   | Just (ChannelMsg (User { .. }) msg)  <- fromMessage message =
       updateNickTrack state userNick msg msgTime >> handleCommands userNick msg
   | Just (ActionMsg (User { .. }) msg)   <- fromMessage message =
@@ -68,15 +68,18 @@ nickTrackerMsg state FullMessage { .. }
       updateNickTrack state userNick msg msgTime >> remove userNick >> return []
   | Just (NickMsg (User { .. }) newNick) <- fromMessage message =
       handleNickChange state userNick newNick msgTime >> swap (userNick, newNick) >> return []
-  | Just (NamesMsg nicks) <- fromMessage message       = do
+  | Just (NamesMsg nicks)                <- fromMessage message = do
       forM_ nicks $ \n -> updateNickTrack state n "" msgTime
       refresh nicks >> updateRefreshTime >> return []
-  | Just IdleMsg                <- fromMessage message = do
+  | Just IdleMsg                         <- fromMessage message = do
       NickTrackingState { .. } <- readIORef state
       if addUTCTime refreshInterval lastRefreshOn < msgTime
-        then updateRefreshTime >> return [toCommand NamesCmd]
+        then updateRefreshTime >> map singleton (newMessage NamesCmd)
         else return []
-  | otherwise                                          = return []
+  | Just (NickTrackRequest nick reply)   <- fromMessage message = io $ do
+      NickTrackingState { .. } <- readIORef state
+      getByNick acid nick >>= putMVar reply >> return []
+  | otherwise                                                   = return []
   where
     updateRefreshTime = atomicModIORef state $ \ s -> s { lastRefreshOn = msgTime }
 
@@ -96,8 +99,8 @@ nickTrackerMsg state FullMessage { .. }
 
 updateNickTrack :: MonadMsgHandler m => IORef NickTrackingState -> Nick -> Text -> UTCTime -> m ()
 updateNickTrack state nck message msgTime = io $ do
-  NickTrackingState { .. } <- readIORef state
-  mnt     <- getByNick acid nck
+  NickTrackingState { .. }       <- readIORef state
+  mnt                            <- getByNick acid nck
   (message', lastMessageOn', cn) <- case (message, mnt) of
     ("", Just (NickTrack { .. })) -> return (lastMessage, lastMessageOn, canonicalNick)
     (_, Just (NickTrack { .. }))  -> return (message, msgTime, canonicalNick)
@@ -108,9 +111,9 @@ updateNickTrack state nck message msgTime = io $ do
 handleNickChange :: MonadMsgHandler m => IORef NickTrackingState -> Nick -> Nick -> UTCTime -> m ()
 handleNickChange state prevNick newNick msgTime = io $ do
   NickTrackingState { .. } <- readIORef state
-  mpnt         <- getByNick acid prevNick
-  mnt          <- getByNick acid newNick
-  mInfo        <- case (mpnt, mnt) of
+  mpnt                     <- getByNick acid prevNick
+  mnt                      <- getByNick acid newNick
+  mInfo                    <- case (mpnt, mnt) of
     (Nothing, _) -> newCanonicalNick >>= \cn -> return $ Just ("", cn, msgTime)
     (Just pnt, Nothing) ->
       return $ Just (lastMessage pnt, canonicalNick pnt, lastMessageOn pnt)
@@ -128,26 +131,27 @@ newCanonicalNick = map (CanonicalNick . pack . U.toString) U.nextRandom
 withNickTracks :: MonadMsgHandler m
                => (Text -> [NickTrack] -> HashSet Nick -> IO Text)
                -> IORef NickTrackingState -> Nick -> Text
-               -> m [Command]
+               -> m [Message]
 withNickTracks f state _ msg = io $ do
   NickTrackingState { .. } <- readIORef state
   let nick = clean . unwords . drop 1 . words $ msg
   if nick == ""
     then return []
     else do
-      mcn <- liftM (map canonicalNick) . getByNick acid . Nick $ nick
-      map (singleton . toCommand . ChannelMsgReply) $ case mcn of
+      mcn   <- liftM (map canonicalNick) . getByNick acid . Nick $ nick
+      reply <- case mcn of
         Nothing -> return $ "Unknown nick: " ++ nick
         Just cn -> io $ query acid (GetByCanonicalNickQ cn) >>= \nts -> f nick nts onlineNicks
+      map singleton . newMessage . ChannelMsgReply $ reply
 
-handleNickCommand :: MonadMsgHandler m => IORef NickTrackingState -> Nick -> Text -> m [Command]
+handleNickCommand :: MonadMsgHandler m => IORef NickTrackingState -> Nick -> Text -> m [Message]
 handleNickCommand = withNickTracks $ \nck nickTracks _ -> do
   let nicks = map ((\(Nick n) -> n) . nick) nickTracks
   return . (nck ++) $ if length nicks == 1
     then " has only one nick"
     else "'s other nicks are: " ++ intercalate ", " (filter (/= nck) nicks)
 
-handleSeenCommand :: MonadMsgHandler m => IORef NickTrackingState -> Nick -> Text -> m [Command]
+handleSeenCommand :: MonadMsgHandler m => IORef NickTrackingState -> Nick -> Text -> m [Message]
 handleSeenCommand = withNickTracks $ \nck nickTracks onlineNicks -> do
   let NickTrack { lastSeenOn = lastSeenOn'
                 , nick       = Nick lastSeenAs } = maximumByEx (comparing lastSeenOn) nickTracks
@@ -165,21 +169,14 @@ handleSeenCommand = withNickTracks $ \nck nickTracks onlineNicks -> do
       (if nck /= lastMessageAs then " as " ++ lastMessageAs else "") ++
       " said: " ++ lastMessage')
 
-handleForgetNicksCommand :: MonadMsgHandler m => IORef NickTrackingState -> Nick -> Text -> m [Command]
+handleForgetNicksCommand :: MonadMsgHandler m => IORef NickTrackingState -> Nick -> Text -> m [Message]
 handleForgetNicksCommand state nick _ = do
   NickTrackingState { .. } <- readIORef state
   io $ do
     Just nt <- getByNick acid nick
     cn      <- newCanonicalNick
     saveNickTrack acid $ nt { canonicalNick = cn }
-  return [toCommand . ChannelMsgReply $ "Forgot all alternate nicks of " ++ nickToText nick]
-
-nickTrackerEvent :: MonadMsgHandler m => IORef NickTrackingState -> Event -> m EventResponse
-nickTrackerEvent state event = case fromEvent event of
-  Just (NickTrackRequest nick reply, _) -> io $ do
-    NickTrackingState { .. } <- readIORef state
-    getByNick acid nick >>= putMVar reply >> return RespNothing
-  _ -> return RespNothing
+  map singleton . newMessage . ChannelMsgReply $ "Forgot all alternate nicks of " ++ nickToText nick
 
 stopNickTracker :: MonadMsgHandler m => IORef NickTrackingState -> m ()
 stopNickTracker state = io $ do
@@ -195,14 +192,12 @@ nickTrackerMsgHandlerMaker = MsgHandlerMaker "nicktracker" go
       ("!seen", "Lets you know when a user was last seen online and last spoke in the channel. !seen <user nick>"),
       ("!forgetnicks", "Forgets all your alternate nicks. !forgetnicks") ]
 
-    go BotConfig { .. } _ "nicktracker" = do
+    go BotConfig { .. } _ = do
       state <- io $ do
         now             <- getCurrentTime
         refreshInterval <- map convert (CF.lookupDefault 60 config "nicktracker.refresh_interval" :: IO Int)
         acid            <- openLocalState emptyNickTracking
         newIORef (NickTrackingState acid refreshInterval mempty now)
-      return . Just $ newMsgHandler { onMessage = nickTrackerMsg state
-                                    , onEvent   = nickTrackerEvent state
-                                    , onStop    = stopNickTracker state
-                                    , onHelp    = return helpMsgs }
-    go _ _ _                            = return Nothing
+      return $ newMsgHandler { onMessage   = nickTrackerMsg state
+                             , onStop      = stopNickTracker state
+                             , handlerHelp = return helpMsgs }

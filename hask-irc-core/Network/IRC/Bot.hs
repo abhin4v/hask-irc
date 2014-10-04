@@ -1,22 +1,17 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Network.IRC.Bot
-  ( Line
-  , sendCommand
-  , sendMessage
-  , sendEvent
-  , readLine
+  ( In
   , sendCommandLoop
-  , readLineLoop
-  , messageProcessLoop
-  , eventProcessLoop )
+  , readMessageLoop
+  , messageProcessLoop )
 where
 
 import qualified Data.Text.Format  as TF
 import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
-import Control.Concurrent.Lifted (fork, Chan, readChan, writeChan, threadDelay)
+import Control.Concurrent.Lifted (threadDelay)
 import Control.Exception.Lifted  (mask_, mask)
 import Control.Monad.Reader      (ask)
 import Control.Monad.State       (get, put)
@@ -25,145 +20,108 @@ import System.IO                 (hIsEOF)
 import System.Timeout            (timeout)
 import System.Log.Logger.TH      (deriveLoggers)
 
+import Network.IRC.MessageBus
 import Network.IRC.Internal.Types
 import Network.IRC.Protocol
 import Network.IRC.Types
 import Network.IRC.Util
 
-$(deriveLoggers "HSL" [HSL.DEBUG, HSL.INFO, HSL.ERROR])
+$(deriveLoggers "HSL" [HSL.INFO, HSL.ERROR])
 
-data Line = Timeout | EOF | Line !UTCTime !Text | Msg FullMessage deriving (Show, Eq)
+data RawIn = Line !UTCTime !Text | EOS deriving (Show, Eq)
+data In    = Timeout | EOD | Msg Message deriving (Show, Eq)
 
-sendCommand :: Chan Command -> Command -> IO ()
-sendCommand = writeChan
-
-sendMessage :: Chan Line -> FullMessage -> IO ()
-sendMessage = (. Msg) . writeChan
-
-sendEvent :: Chan Event -> Event -> IO ()
-sendEvent = writeChan
-
-readLine :: Chan Line -> IO Line
-readLine = readChan
-
-sendCommandLoop :: Channel Command -> Bot -> IO ()
-sendCommandLoop (commandChan, latch) bot@Bot { .. } = do
-  cmd       <- readChan commandChan
-  let mline = formatCommand botConfig cmd
+sendCommandLoop :: MessageChannel Message -> Bot -> IO ()
+sendCommandLoop commandChan bot@Bot { .. } = do
+  msg@(Message _ _ cmd) <- receiveMessage commandChan
+  let mline = formatCommand botConfig msg
   handle (\(e :: SomeException) ->
-            errorM ("Error while writing to connection: " ++ show e) >> latchIt latch) $ do
+            errorM ("Error while writing to connection: " ++ show e) >> closeMessageChannel commandChan) $ do
     whenJust mline $ \line -> do
       TF.hprint botSocket "{}\r\n" $ TF.Only line
       infoM . unpack $ "> " ++ line
-    case fromCommand cmd of
-      Just QuitCmd -> latchIt latch
-      _            -> sendCommandLoop (commandChan, latch) bot
+    case fromMessage cmd of
+      Just QuitCmd -> closeMessageChannel commandChan
+      _            -> sendCommandLoop commandChan bot
 
-readLineLoop :: MVar BotStatus -> Channel Line -> Bot -> Int -> IO ()
-readLineLoop = go []
+readMessageLoop :: MVar BotStatus -> MessageChannel In -> Bot -> Int -> IO ()
+readMessageLoop = go []
   where
     msgPartTimeout = 10
 
-    go !msgParts mvBotStatus (lineChan, latch) bot@Bot { .. } timeoutDelay = do
+    go !msgParts mvBotStatus inChan bot@Bot { .. } timeoutDelay = do
       botStatus <- readMVar mvBotStatus
       case botStatus of
-        Disconnected -> latchIt latch
+        Disconnected -> closeMessageChannel inChan
         _            -> do
           mLine     <- try $ timeout timeoutDelay readLine'
           msgParts' <- case mLine of
             Left (e :: SomeException)     -> do
               errorM $ "Error while reading from connection: " ++ show e
-              writeChan lineChan EOF >> return msgParts
-            Right Nothing                 -> writeChan lineChan Timeout >> return msgParts
+              sendMessage inChan EOD >> return msgParts
+            Right Nothing                 -> sendMessage inChan Timeout >> return msgParts
             Right (Just (Line time line)) -> do
               let (mmsg, msgParts') = parseLine botConfig time line msgParts
-              whenJust mmsg $ writeChan lineChan . Msg
+              whenJust mmsg $ sendMessage inChan . Msg
               return msgParts'
-            Right (Just l)                -> writeChan lineChan l >> return msgParts
+            Right (Just EOS)              -> sendMessage inChan EOD >> return msgParts
 
           limit <- map (addUTCTime (- msgPartTimeout)) getCurrentTime
           let msgParts'' = concat
                            . filter ((> limit) . msgPartTime . headEx . sortBy (flip $ comparing msgPartTime))
                            . groupAllOn (msgPartParserId &&& msgPartTarget) $ msgParts'
-          go msgParts'' mvBotStatus (lineChan, latch) bot timeoutDelay
+          go msgParts'' mvBotStatus inChan bot timeoutDelay
       where
         readLine' = do
           eof <- hIsEOF botSocket
           if eof
-            then return EOF
+            then return EOS
             else mask $ \unmask -> do
               line <- map initEx . unmask $ hGetLine botSocket
               infoM . unpack $ "< " ++ line
               now <- getCurrentTime
               return $ Line now line
 
-messageProcessLoop :: Chan Line -> Chan Command -> IRC ()
+messageProcessLoop :: MessageChannel In -> MessageChannel Message -> IRC ()
 messageProcessLoop = go 0
   where
-    go !idleFor lineChan commandChan = do
-      status         <- get
-      bot@Bot { .. } <- ask
-      let nick       = botNick botConfig
+    go !idleFor inChan messageChan = do
+      status     <- get
+      Bot { .. } <- ask
+      let nick   = botNick botConfig
 
       nStatus <- io . mask_ $
         if idleFor >= (oneSec * botTimeout botConfig)
           then infoM "Timeout" >> return Disconnected
           else do
             when (status == Kicked) $
-              threadDelay (5 * oneSec) >> sendCommand commandChan (toCommand JoinCmd)
+              threadDelay (5 * oneSec) >> newMessage JoinCmd >>= sendMessage messageChan
 
-            mLine <- readLine lineChan
-            case mLine of
-              Timeout      -> do
-                now <- getCurrentTime
-                dispatchHandlers bot (FullMessage now "" $ toMessage IdleMsg) >> return Idle
-              EOF          -> infoM "Connection closed" >> return Disconnected
-              Line _ _     -> error "This should never happen"
-              Msg (msg@FullMessage { .. }) -> do
+            mIn <- receiveMessage inChan
+            case mIn of
+              Timeout -> newMessage IdleMsg >>= sendMessage messageChan >> return Idle
+              EOD     -> infoM "Connection closed" >> return Disconnected
+              Msg (msg@Message { .. }) -> do
                 nStatus <- handleMsg nick message
-                dispatchHandlers bot msg
+                sendMessage messageChan msg
                 return nStatus
 
       put nStatus
       case nStatus of
-        Idle             -> go (idleFor + oneSec) lineChan commandChan
+        Idle             -> go (idleFor + oneSec) inChan messageChan
         Disconnected     -> return ()
         NickNotAvailable -> return ()
-        _                -> go 0 lineChan commandChan
+        _                -> go 0 inChan messageChan
 
       where
-        dispatchHandlers Bot { .. } message =
-          forM_ (mapValues msgHandlers) $ \msgHandler -> void . fork $
-            handle (\(e :: SomeException) ->
-                      errorM $ "Exception while processing message: " ++ show e) $ do
-              cmds <- handleMessage msgHandler botConfig message
-              forM_ cmds (sendCommand commandChan)
-
         handleMsg nick message
           | Just (JoinMsg user)   <- fromMessage message, userNick user == nick =
               infoM "Joined" >> return Joined
-          | Just (KickMsg { .. }) <- fromMessage message, kickedNick == nick =
+          | Just (KickMsg { .. }) <- fromMessage message, kickedNick == nick    =
               infoM "Kicked" >> return Kicked
-          | Just NickInUseMsg     <- fromMessage message =
-              infoM "Nick already in use"                 >> return NickNotAvailable
-          | Just (ModeMsg { .. }) <- fromMessage message, modeUser == Self =
-              sendCommand commandChan (toCommand JoinCmd) >> return Connected
-          | otherwise = return Connected
-
-eventProcessLoop :: Channel Event -> Chan Line -> Chan Command -> Bot -> IO ()
-eventProcessLoop (eventChan, latch) lineChan commandChan bot@Bot {.. } = do
-  event <- readChan eventChan
-  case fromEvent event of
-    Just (QuitEvent, _) -> latchIt latch
-    _                   -> do
-      debugM $ "Event: " ++ show event
-      forM_ (mapValues msgHandlers) $ \msgHandler -> void . fork $
-        handle (\(ex :: SomeException) ->
-                  errorM $ "Exception while processing event: " ++ show ex) $ do
-          resp <- handleEvent msgHandler botConfig event
-          case resp of
-            RespMessage messages -> forM_ messages $ sendMessage lineChan
-            RespCommand commands -> forM_ commands $ sendCommand commandChan
-            RespEvent events     -> forM_ events $ sendEvent eventChan
-            _                    -> return ()
-      eventProcessLoop (eventChan, latch) lineChan commandChan bot
+          | Just NickInUseMsg     <- fromMessage message                        =
+              infoM "Nick already in use"                    >> return NickNotAvailable
+          | Just (ModeMsg { .. }) <- fromMessage message, modeUser == Self      =
+              newMessage JoinCmd >>= sendMessage messageChan >> return Connected
+          | otherwise                                                           =
+              return Connected

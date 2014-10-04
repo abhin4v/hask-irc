@@ -13,8 +13,8 @@ import Data.Acid            (AcidState, Query, Update, makeAcidic, query, update
                              openLocalState, createArchive)
 import Data.Acid.Local      (createCheckpointAndClose)
 
+import Network.IRC
 import Network.IRC.Handlers.Auth.Types
-import Network.IRC.Types
 import Network.IRC.Util
 
 -- database
@@ -42,12 +42,20 @@ issueToken acid user = do
 
 -- handler
 
-authMessage :: MonadMsgHandler m => IORef (AcidState Auth) -> FullMessage ->  m [Command]
-authMessage state FullMessage { .. }
+authMessage :: MonadMsgHandler m => IORef (AcidState Auth) -> Message ->  m [Message]
+authMessage state Message { .. }
   | Just (PrivMsg user msg) <- fromMessage message
-  , "token" `isPrefixOf` msg =
-      map (singleton . toCommand . PrivMsgReply user) . io $ readIORef state >>= flip issueToken (userNick user)
-authMessage _ _ = return []
+  , "token" `isPrefixOf` msg = do
+      token <- io $ readIORef state >>= flip issueToken (userNick user)
+      map singleton . newMessage $ PrivMsgReply user token
+  | Just (AuthRequest user token reply) <- fromMessage message = io $ do
+      acid <- readIORef state
+      mt   <- query acid (GetToken user)
+      case mt of
+        Just t  -> putMVar reply (t == token)
+        Nothing -> putMVar reply False
+      return []
+  | otherwise = return []
 
 stopAuth :: MonadMsgHandler m => IORef (AcidState Auth) -> m ()
 stopAuth state = io $ do
@@ -55,26 +63,13 @@ stopAuth state = io $ do
   createArchive acid
   createCheckpointAndClose acid
 
-authEvent :: MonadMsgHandler m => IORef (AcidState Auth) -> Event -> m EventResponse
-authEvent state event = case fromEvent event of
-  Just (AuthEvent user token reply, _) -> io $ do
-    acid <- readIORef state
-    mt   <- query acid (GetToken user)
-    case mt of
-      Just t  -> putMVar reply (t == token)
-      Nothing -> putMVar reply False
-    return RespNothing
-  _                                    -> return RespNothing
-
 authMsgHandlerMaker :: MsgHandlerMaker
 authMsgHandlerMaker = MsgHandlerMaker "auth" go
   where
     helpMsg botNick = "Send a PM to get a new auth token. /msg " ++ nickToText botNick ++ " token"
 
-    go BotConfig { .. } _ "auth" = do
+    go BotConfig { .. } _ = do
       state <- io $ openLocalState emptyAuth >>= newIORef
-      return . Just $ newMsgHandler { onMessage = authMessage state
-                                    , onEvent   = authEvent state
-                                    , onStop    = stopAuth state
-                                    , onHelp    = return $ singletonMap "token" (helpMsg botNick) }
-    go _ _ _                     = return Nothing
+      return $ newMsgHandler { onMessage    = authMessage state
+                             , onStop      = stopAuth state
+                             , handlerHelp = return $ singletonMap "token" (helpMsg botNick) }

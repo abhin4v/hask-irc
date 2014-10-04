@@ -16,7 +16,7 @@ import Network.Curl.Aeson       (curlAesonGet, CurlAesonException)
 import Network.HTTP.Base        (urlEncode)
 import System.Log.Logger.TH     (deriveLoggers)
 
-import Network.IRC.Types
+import Network.IRC
 
 $(deriveLoggers "HSL" [HSL.ERROR])
 
@@ -25,10 +25,9 @@ songSearchMsgHandlerMaker = MsgHandlerMaker "songsearch" go
   where
     helpMsg = "Search for song. !m <song> or !m <artist> - <song>"
 
-    go _ _ "songsearch" =
-      return . Just $ newMsgHandler { onMessage = songSearch,
-                                      onHelp    = return $ singletonMap "!m" helpMsg }
-    go _ _ _            = return Nothing
+    go _ _ =
+      return $ newMsgHandler { onMessage   = songSearch
+                             , handlerHelp = return $ singletonMap "!m" helpMsg }
 
 data Song = NoSong | Song { url :: Text, name :: Text, artist :: Text }
             deriving (Show, Eq)
@@ -38,15 +37,15 @@ instance FromJSON Song where
     parseJSON a | a == emptyArray = return NoSong
     parseJSON _                   = mempty
 
-songSearch :: MonadMsgHandler m => FullMessage -> m [Command]
-songSearch FullMessage { .. }
+songSearch :: MonadMsgHandler m => Message -> m [Message]
+songSearch Message { .. }
   | Just (ChannelMsg _ msg) <- fromMessage message
   , "!m " `isPrefixOf` msg = do
       BotConfig { .. } <- ask
       liftIO $ do
         let query = strip . drop 3 $ msg
-        mApiKey <- CF.lookup config "songsearch.tinysong_apikey"
-        map (singleton . toCommand . ChannelMsgReply) $ case mApiKey of
+        mApiKey   <- CF.lookup config "songsearch.tinysong_apikey"
+        reply     <- map ChannelMsgReply $ case mApiKey of
           Nothing     -> do
             errorM "tinysong api key not found in config"
             return $ "Error while searching for " ++ query
@@ -62,4 +61,5 @@ songSearch FullMessage { .. }
               Right song                     -> return $ case song of
                 Song { .. } -> "Listen to " ++ artist ++ " - " ++ name ++ " at " ++ url
                 NoSong      -> "No song found for: " ++ query
+        map singleton . newMessage $ reply
   | otherwise              = return []
