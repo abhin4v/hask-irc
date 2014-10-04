@@ -2,6 +2,7 @@ server = "irc.freenode.net"
 port = 6667
 channel = "#testtesttest"
 nick = "haskman"
+password = "xxxsss"
 timeout = 130
 msghandlers = ["greeter", "welcomer", "messagelogger", "songsearch", "auth", "nicktracker", "tell"]
 

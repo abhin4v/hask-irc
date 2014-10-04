@@ -7,6 +7,7 @@ module Network.IRC.Bot
   , messageProcessLoop )
 where
 
+import qualified Data.Configurator as CF
 import qualified Data.Text.Format  as TF
 import qualified System.Log.Logger as HSL
 
@@ -88,6 +89,7 @@ messageProcessLoop = go 0
       status     <- get
       Bot { .. } <- ask
       let nick   = botNick botConfig
+      mpass      <- io $ CF.lookup (config botConfig) "password"
 
       nStatus <- io . mask_ $
         if idleFor >= (oneSec * botTimeout botConfig)
@@ -101,7 +103,7 @@ messageProcessLoop = go 0
               Timeout -> newMessage IdleMsg >>= sendMessage messageChan >> return Idle
               EOD     -> infoM "Connection closed" >> return Disconnected
               Msg (msg@Message { .. }) -> do
-                nStatus <- handleMsg nick message
+                nStatus <- handleMsg nick message mpass
                 sendMessage messageChan msg
                 return nStatus
 
@@ -113,14 +115,18 @@ messageProcessLoop = go 0
         _                -> go 0 inChan messageChan
 
       where
-        handleMsg nick message
+        handleMsg nick message mpass
           | Just (JoinMsg user)   <- fromMessage message, userNick user == nick =
               infoM "Joined" >> return Joined
           | Just (KickMsg { .. }) <- fromMessage message, kickedNick == nick    =
               infoM "Kicked" >> return Kicked
           | Just NickInUseMsg     <- fromMessage message                        =
               infoM "Nick already in use"                    >> return NickNotAvailable
-          | Just (ModeMsg { .. }) <- fromMessage message, modeUser == Self      =
-              newMessage JoinCmd >>= sendMessage messageChan >> return Connected
+          | Just (ModeMsg { .. }) <- fromMessage message, modeUser == Self      = do
+              whenJust mpass $ \pass -> do
+                msg <- newMessage $ PrivMsgReply (User (Nick "NickServ") "") $ "IDENTIFY " ++ pass
+                sendMessage messageChan msg
+              newMessage JoinCmd >>= sendMessage messageChan
+              return Connected
           | otherwise                                                           =
               return Connected
