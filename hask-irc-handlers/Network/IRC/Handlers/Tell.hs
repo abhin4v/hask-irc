@@ -7,7 +7,6 @@ module Network.IRC.Handlers.Tell (tellMsgHandlerMaker) where
 import qualified Data.IxSet as IS
 
 import ClassyPrelude hiding (swap)
-import Control.Monad.Reader (ask)
 import Control.Monad.State  (get, put)
 import Data.Acid            (AcidState, Query, Update, makeAcidic, query, update,
                              openLocalState, createArchive)

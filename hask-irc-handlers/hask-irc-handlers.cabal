@@ -57,7 +57,7 @@ library
                        hask-irc-core        ==0.1.0,
                        acid-state           >=0.12    && <0.13,
                        aeson                >=0.7     && <0.8,
-                       classy-prelude       >=0.9     && <1.0,
+                       classy-prelude       >=0.10    && <1.0,
                        configurator         >=0.2     && <0.3,
                        convertible          >=1.1     && <1.2,
                        curl-aeson           >=0.0.3   && <0.1,

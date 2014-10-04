@@ -1,9 +1,8 @@
 module Network.IRC.Handlers.Core (coreMsgHandlerMakers) where
 
 import ClassyPrelude
-import Control.Monad.Reader (ask)
-import Data.Convertible     (convert)
-import Data.Time            (addUTCTime)
+import Data.Convertible (convert)
+import Data.Time        (addUTCTime)
 
 import Network.IRC.Types
 import Network.IRC.Util

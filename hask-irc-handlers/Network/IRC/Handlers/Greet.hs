@@ -1,7 +1,6 @@
 module Network.IRC.Handlers.Greet (greetMsgHandlerMaker, welcomeMsgHandlerMaker) where
 
 import ClassyPrelude
-import Control.Monad.Reader (ask)
 
 import Network.IRC
 import Network.IRC.Util

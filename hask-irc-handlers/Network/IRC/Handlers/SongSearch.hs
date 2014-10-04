@@ -8,7 +8,6 @@ import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
 import Control.Exception.Lifted (evaluate)
-import Control.Monad.Reader     (ask)
 import Data.Aeson               (FromJSON, parseJSON, Value (..), (.:))
 import Data.Aeson.Types         (emptyArray)
 import Data.Text                (strip)

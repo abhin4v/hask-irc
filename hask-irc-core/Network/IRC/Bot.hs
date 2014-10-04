@@ -13,7 +13,6 @@ import qualified System.Log.Logger as HSL
 import ClassyPrelude
 import Control.Concurrent.Lifted (threadDelay)
 import Control.Exception.Lifted  (mask_, mask)
-import Control.Monad.Reader      (ask)
 import Control.Monad.State       (get, put)
 import Data.Time                 (addUTCTime)
 import System.IO                 (hIsEOF)

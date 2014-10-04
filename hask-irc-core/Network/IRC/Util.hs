@@ -6,7 +6,6 @@ module Network.IRC.Util where
 import qualified Data.Text.Format        as TF
 
 import ClassyPrelude
-import Control.Arrow      (Arrow)
 import Control.Monad.Base (MonadBase)
 import Data.Convertible   (convert)
 import Data.Text          (strip)
@@ -29,9 +28,6 @@ clean = toLower . strip
 
 io :: MonadIO m => IO a -> m a
 io = liftIO
-
-both :: Arrow cat => cat b d -> cat (b, b) (d, d)
-both f = first f . second f
 
 atomicModIORef :: MonadBase IO f => IORef t -> (t -> t) -> f ()
 atomicModIORef ref f = void . atomicModifyIORef' ref $ \v -> (f v, v)

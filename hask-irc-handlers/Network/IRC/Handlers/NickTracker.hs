@@ -9,7 +9,6 @@ import qualified Data.UUID         as U
 import qualified Data.UUID.V4      as U
 
 import ClassyPrelude hiding (swap)
-import Control.Monad.Reader (ask)
 import Control.Monad.State  (get, put)
 import Data.Acid            (AcidState, Query, Update, makeAcidic, query, update,
                              openLocalState, createArchive)

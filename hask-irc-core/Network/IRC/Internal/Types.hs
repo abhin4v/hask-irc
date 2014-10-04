@@ -9,7 +9,6 @@ import qualified Data.Configurator as CF
 
 import ClassyPrelude
 import Control.Monad.Base      (MonadBase)
-import Control.Monad.Reader    (ReaderT, MonadReader, runReaderT)
 import Control.Monad.State     (StateT, MonadState, execStateT)
 import Data.Configurator.Types (Config)
 
