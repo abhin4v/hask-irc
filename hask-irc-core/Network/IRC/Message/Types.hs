@@ -28,7 +28,7 @@ data User
   = Self
   -- | An user other than the bot.
   | User
-  { userNick :: !Nick         -- ^ The user's nick.
+  { userNick   :: !Nick         -- ^ The user's nick.
   , userServer :: !Text       -- ^ The user's server.
   } deriving (Show, Eq, Ord)
 

@@ -113,17 +113,21 @@ runBotIntenal :: BotConfig -> IO ()
 runBotIntenal botConfig' = withSocketsDo $ do
   status <- run
   case status of
-    Disconnected     -> debugM "Restarting .." >> runBotIntenal botConfigWithCore
-    Errored          -> debugM "Restarting .." >> runBotIntenal botConfigWithCore
+    Disconnected     -> debugM "Restarting .."   >> runBotIntenal botConfigWithCore
+    Errored          -> debugM "Restarting .."   >> runBotIntenal botConfigWithCore
     Interrupted      -> return ()
-    NickNotAvailable -> return ()
+    NickNotAvailable -> debugM "Trying new nick" >> runBotIntenal botConfigWithNewNick
     _                -> error "Unsupported status"
   where
     botConfigWithCore = botConfig' {
       msgHandlerInfo =
         foldl' (\m name -> insertMap name mempty m) mempty
-          (hashNub $ mapKeys (msgHandlerInfo botConfig') ++ mapKeys coreMsgHandlerMakers),
-      msgHandlerMakers = coreMsgHandlerMakers <> msgHandlerMakers botConfig'
+          (hashNub $ mapKeys (msgHandlerInfo botConfig') ++ mapKeys coreMsgHandlerMakers)
+    , msgHandlerMakers = coreMsgHandlerMakers <> msgHandlerMakers botConfig'
+    }
+
+    botConfigWithNewNick = botConfigWithCore {
+      botNick = Nick $ nickToText (botNick botConfigWithCore) ++ "_"
     }
 
     handleErrors :: SomeException -> IO BotStatus

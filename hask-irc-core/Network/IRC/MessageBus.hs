@@ -10,6 +10,7 @@ module Network.IRC.MessageBus
   , newMessageChannel
   , sendMessage
   , receiveMessage
+  , receiveMessageEither
   , closeMessageChannel
   , awaitMessageChannel ) where
 
@@ -56,3 +57,7 @@ closeMessageChannel (MessageChannel latch _ _) = doLatch latch
 
 awaitMessageChannel :: MessageChannel a -> IO ()
 awaitMessageChannel (MessageChannel latch _ _) = awaitLatch latch
+
+receiveMessageEither :: MessageChannel a -> MessageChannel b -> IO (Either a b)
+receiveMessageEither chan1 chan2 = atomically $
+  map Left (receiveMessageSTM chan1) `orElseSTM` map Right (receiveMessageSTM chan2)

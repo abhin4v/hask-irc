@@ -54,7 +54,7 @@ readMessageLoop = go []
       case botStatus of
         Disconnected -> closeMessageChannel inChan
         _            -> do
-          mLine     <- try $ timeout timeoutDelay readLine'
+          mLine     <- try $ timeout timeoutDelay readLine
           msgParts' <- case mLine of
             Left (e :: SomeException)     -> do
               errorM $ "Error while reading from connection: " ++ show e
@@ -67,12 +67,12 @@ readMessageLoop = go []
             Right (Just EOS)              -> sendMessage inChan EOD >> return msgParts
 
           limit <- map (addUTCTime (- msgPartTimeout)) getCurrentTime
-          let msgParts'' = concat
-                           . filter ((> limit) . msgPartTime . headEx . sortBy (flip $ comparing msgPartTime))
-                           . groupAllOn (msgPartParserId &&& msgPartTarget) $ msgParts'
-          go msgParts'' mvBotStatus inChan bot timeoutDelay
+          let validMsgParts = concat
+                             . filter ((> limit) . msgPartTime . headEx . sortBy (flip $ comparing msgPartTime))
+                             . groupAllOn (msgPartParserId &&& msgPartTarget) $ msgParts'
+          go validMsgParts mvBotStatus inChan bot timeoutDelay
       where
-        readLine' = do
+        readLine = do
           eof <- hIsEOF botSocket
           if eof
             then return EOS
@@ -98,14 +98,15 @@ messageProcessLoop = go 0
             when (status == Kicked) $
               threadDelay (5 * oneSec) >> newMessage JoinCmd >>= sendMessage messageChan
 
-            mIn <- receiveMessage inChan
+            mIn <- receiveMessageEither inChan messageChan
             case mIn of
-              Timeout -> newMessage IdleMsg >>= sendMessage messageChan >> return Idle
-              EOD     -> infoM "Connection closed" >> return Disconnected
-              Msg (msg@Message { .. }) -> do
+              Left Timeout -> newMessage IdleMsg >>= sendMessage messageChan >> return Idle
+              Left EOD     -> infoM "Connection closed" >> return Disconnected
+              Left (Msg (msg@Message { .. })) -> do
                 nStatus <- handleMsg nick message mpass
                 sendMessage messageChan msg
                 return nStatus
+              Right _      -> return status
 
       put nStatus
       case nStatus of
@@ -121,7 +122,7 @@ messageProcessLoop = go 0
           | Just (KickMsg { .. }) <- fromMessage message, kickedNick == nick    =
               infoM "Kicked" >> return Kicked
           | Just NickInUseMsg     <- fromMessage message                        =
-              infoM "Nick already in use"                    >> return NickNotAvailable
+              infoM "Nick already in use" >> return NickNotAvailable
           | Just (ModeMsg { .. }) <- fromMessage message, modeUser == Self      = do
               whenJust mpass $ \pass -> do
                 msg <- newMessage $ PrivMsgReply (User (Nick "NickServ") "") $ "IDENTIFY " ++ pass

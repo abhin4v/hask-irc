@@ -99,18 +99,17 @@ formatCommand botConfig@BotConfig { .. } message =
 
 defaultCommandFormatter :: CommandFormatter
 defaultCommandFormatter BotConfig { .. } Message { .. }
-  | Just (PongCmd msg)                    <- fromMessage message = Just $ "PONG :" ++ msg
-  | Just (PingCmd msg)                    <- fromMessage message = Just $ "PING :" ++ msg
-  | Just NickCmd                          <- fromMessage message = Just $ "NICK " ++ botNick'
-  | Just UserCmd                          <- fromMessage message =
-      Just $ "USER " ++ botNick' ++ " 0 * :" ++ botNick'
-  | Just JoinCmd                          <- fromMessage message = Just $ "JOIN " ++ botChannel
-  | Just QuitCmd                          <- fromMessage message = Just "QUIT"
-  | Just (ChannelMsgReply msg)            <- fromMessage message =
+  | Just (PongCmd msg) <- fromMessage message = Just $ "PONG :" ++ msg
+  | Just (PingCmd msg) <- fromMessage message = Just $ "PING :" ++ msg
+  | Just NickCmd       <- fromMessage message = Just $ "NICK " ++ botNick'
+  | Just UserCmd       <- fromMessage message = Just $ "USER " ++ botNick' ++ " 0 * :" ++ botNick'
+  | Just JoinCmd       <- fromMessage message = Just $ "JOIN " ++ botChannel
+  | Just QuitCmd       <- fromMessage message = Just "QUIT"
+  | Just NamesCmd      <- fromMessage message = Just $ "NAMES " ++ botChannel
+  | Just (ChannelMsgReply msg) <- fromMessage message            =
       Just $ "PRIVMSG " ++ botChannel ++ " :" ++ msg
   | Just (PrivMsgReply (User { .. }) msg) <- fromMessage message =
       Just $ "PRIVMSG " ++ nickToText userNick ++ " :" ++ msg
-  | Just NamesCmd                         <- fromMessage message = Just $ "NAMES " ++ botChannel
   | otherwise                                                    = Nothing
   where
     botNick' = nickToText botNick
