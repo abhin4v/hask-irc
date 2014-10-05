@@ -41,7 +41,6 @@ data ConnectionResource = ConnectionResource
   , botStatus          :: MVar BotStatus
   , inChannel          :: MessageChannel In
   , mainMsgChannel     :: MessageChannel Message
-  , cmdMsgChannel      :: MessageChannel Message
   , handlerMsgChannels :: [MessageChannel Message]
   }
 
@@ -58,7 +57,6 @@ connect botConfig@BotConfig { .. } = do
 
   inChannel        <- newMessageChannel inBus
   mainMsgChannel   <- newMessageChannel messageBus
-  cmdMsgChannel    <- newMessageChannel messageBus
 
   msgHandlersChans <- loadMsgHandlers messageBus
   msgHandlerInfo'  <- foldM (\m (hn, (h, _)) -> getHelp h botConfig >>= \hm -> return $ insertMap hn hm m)
@@ -69,8 +67,7 @@ connect botConfig@BotConfig { .. } = do
   let msgHandlers        = map fst msgHandlersChans
 
   return $ ConnectionResource
-            (Bot botConfig' socket msgHandlers) mvBotStatus
-            inChannel mainMsgChannel cmdMsgChannel msgHandlerChannels
+            (Bot botConfig' socket msgHandlers) mvBotStatus inChannel mainMsgChannel msgHandlerChannels
   where
     connectToWithRetry = connectTo (unpack botServer) (PortNumber (fromIntegral botPort))
                            `catch` (\(e :: SomeException) -> do
@@ -99,8 +96,8 @@ connect botConfig@BotConfig { .. } = do
 disconnect :: ConnectionResource -> IO ()
 disconnect ConnectionResource { bot = Bot { .. }, .. } = do
   debugM "Disconnecting ..."
-  sendMessage cmdMsgChannel =<< newMessage QuitCmd
-  awaitMessageChannel cmdMsgChannel
+  sendMessage mainMsgChannel =<< newMessage QuitCmd
+  awaitMessageChannel mainMsgChannel
 
   swapMVar botStatus Disconnected
   awaitMessageChannel inChannel
@@ -154,10 +151,10 @@ runBotIntenal botConfig' = withSocketsDo $ do
           let Bot { .. } = bot
           debugM $ "Running with config:\n" ++ show botConfig
 
-          sendMessage cmdMsgChannel =<< newMessage NickCmd
-          sendMessage cmdMsgChannel =<< newMessage UserCmd
+          sendMessage mainMsgChannel =<< newMessage NickCmd
+          sendMessage mainMsgChannel =<< newMessage UserCmd
 
-          fork $ sendCommandLoop cmdMsgChannel bot
+          fork $ sendCommandLoop mainMsgChannel bot
           fork $ readMessageLoop botStatus inChannel bot oneSec
           forM_ (zip (mapToList msgHandlers) handlerMsgChannels) $
             void . fork . runHandler botConfig

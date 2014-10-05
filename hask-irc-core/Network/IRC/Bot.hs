@@ -98,15 +98,14 @@ messageProcessLoop = go 0
             when (status == Kicked) $
               threadDelay (5 * oneSec) >> newMessage JoinCmd >>= sendMessage messageChan
 
-            mIn <- receiveMessageEither inChan messageChan
+            mIn <- receiveMessage inChan
             case mIn of
-              Left Timeout -> newMessage IdleMsg >>= sendMessage messageChan >> return Idle
-              Left EOD     -> infoM "Connection closed" >> return Disconnected
-              Left (Msg (msg@Message { .. })) -> do
+              Timeout -> newMessage IdleMsg >>= sendMessage messageChan >> return Idle
+              EOD     -> infoM "Connection closed" >> return Disconnected
+              Msg (msg@Message { .. }) -> do
                 nStatus <- handleMsg nick message mpass
                 sendMessage messageChan msg
                 return nStatus
-              Right _      -> return status
 
       put nStatus
       case nStatus of

@@ -28,7 +28,7 @@ data User
   = Self
   -- | An user other than the bot.
   | User
-  { userNick   :: !Nick         -- ^ The user's nick.
+  { userNick   :: !Nick       -- ^ The user's nick.
   , userServer :: !Text       -- ^ The user's server.
   } deriving (Show, Eq, Ord)
 
@@ -36,7 +36,7 @@ data User
 data Message = Message
   { msgTime :: !UTCTime  -- ^ The time when the message was received.
   , msgLine :: !Text     -- ^ The raw message line.
-  , message :: MessageW   -- ^ The details of the parsed message.
+  , message :: MessageW  -- ^ The details of the parsed message.
   } deriving (Show, Eq)
 
 -- | The typeclass for different types of IRC messages.
