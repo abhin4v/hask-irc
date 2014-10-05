@@ -1,13 +1,15 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 module Network.IRC.Util where
 
-import qualified Data.Text.Format        as TF
+import qualified Data.Text.Format as TF
 
 import ClassyPrelude
 import Control.Monad.Base (MonadBase)
 import Data.Convertible   (convert)
+import Data.Maybe         (fromJust)
 import Data.Text          (strip)
 import Data.Time          (diffUTCTime)
 
@@ -19,6 +21,18 @@ mapKeys = map fst . mapToList
 
 mapValues :: IsMap map => map -> [MapValue map]
 mapValues = map snd . mapToList
+
+mergeMaps :: forall map map1 map2.
+             (IsMap map1, IsMap map2, IsMap map,
+              MapValue map ~ (MapValue map1, MapValue map2),
+              ContainerKey map1 ~ ContainerKey map,
+              ContainerKey map2 ~ ContainerKey map) =>
+             map1 -> map2 -> map
+mergeMaps map1 map2 =
+  flip (`foldl'` mempty) (mapKeys map1) $ \acc key ->
+    if key `member` map2
+      then insertMap key (fromJust $ lookup key map1, fromJust $ lookup key map2) acc
+      else acc
 
 whenJust :: Monad m => Maybe t -> (t -> m ()) -> m ()
 whenJust m f = maybe (return ()) f m

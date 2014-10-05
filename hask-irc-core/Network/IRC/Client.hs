@@ -37,11 +37,11 @@ import Network.IRC.Util
 $(deriveLoggers "HSL" [HSL.DEBUG, HSL.ERROR])
 
 data ConnectionResource = ConnectionResource
-  { bot                :: Bot
-  , botStatus          :: MVar BotStatus
-  , inChannel          :: MessageChannel In
-  , mainMsgChannel     :: MessageChannel Message
-  , handlerMsgChannels :: [MessageChannel Message]
+  { bot                :: !Bot
+  , botStatus          :: !(MVar BotStatus)
+  , inChannel          :: !(MessageChannel In)
+  , mainMsgChannel     :: !(MessageChannel Message)
+  , handlerMsgChannels :: !(Map MsgHandlerName (MessageChannel Message))
   }
 
 connect :: BotConfig -> IO ConnectionResource
@@ -63,7 +63,7 @@ connect botConfig@BotConfig { .. } = do
                         mempty (mapToList msgHandlersChans)
 
   let botConfig'         = botConfig { msgHandlerInfo = msgHandlerInfo'}
-  let msgHandlerChannels = map snd (mapValues msgHandlersChans)
+  let msgHandlerChannels = map snd msgHandlersChans
   let msgHandlers        = map fst msgHandlersChans
 
   return $ ConnectionResource
@@ -132,7 +132,8 @@ runBotIntenal botConfig' = withSocketsDo $ do
         Just UserInterrupt -> debugM "User interrupt"          >> return Interrupted
         _                  -> debugM ("Exception! " ++ show e) >> return Errored
 
-    runHandler botConfig ((msgHandlerName, handler), msgChannel) = receiveMessage msgChannel >>= go
+    runHandler :: BotConfig -> (MsgHandlerName, (MsgHandler, MessageChannel Message)) -> IO ()
+    runHandler botConfig (msgHandlerName, (handler, msgChannel)) = receiveMessage msgChannel >>= go
       where
         go msg@Message { .. }
           | Just QuitCmd <- fromMessage message = do
@@ -143,7 +144,7 @@ runBotIntenal botConfig' = withSocketsDo $ do
           | otherwise = do
               resps <- handleMessage handler botConfig msg
               forM_ resps $ sendMessage msgChannel
-              runHandler botConfig ((msgHandlerName, handler), msgChannel)
+              runHandler botConfig (msgHandlerName, (handler, msgChannel))
 
     run = bracket (connect botConfigWithCore) disconnect $
       \ConnectionResource { .. } ->
@@ -156,7 +157,7 @@ runBotIntenal botConfig' = withSocketsDo $ do
 
           fork $ sendCommandLoop mainMsgChannel bot
           fork $ readMessageLoop botStatus inChannel bot oneSec
-          forM_ (zip (mapToList msgHandlers) handlerMsgChannels) $
+          forM_ (mapToList . asMap $ mergeMaps msgHandlers handlerMsgChannels) $
             void . fork . runHandler botConfig
           runIRC bot Connected (messageProcessLoop inChannel mainMsgChannel)
 

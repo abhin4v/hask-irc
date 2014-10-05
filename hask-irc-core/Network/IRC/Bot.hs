@@ -29,7 +29,7 @@ import Network.IRC.Util
 $(deriveLoggers "HSL" [HSL.INFO, HSL.ERROR])
 
 data RawIn = Line !UTCTime !Text | EOS deriving (Show, Eq)
-data In    = Timeout | EOD | Msg Message deriving (Show, Eq)
+data In    = Timeout | EOD | Msg !Message deriving (Show, Eq)
 
 sendCommandLoop :: MessageChannel Message -> Bot -> IO ()
 sendCommandLoop commandChan bot@Bot { .. } = do
