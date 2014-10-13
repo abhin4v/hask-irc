@@ -70,13 +70,13 @@ library
                        unix                 >=2.7     && <2.8
 
   exposed-modules:     Network.IRC,
-                       Network.IRC.MessageBus,
                        Network.IRC.Types,
                        Network.IRC.Client,
                        Network.IRC.Util
 
   other-modules:       Network.IRC.Internal.Types,
                        Network.IRC.Message.Types,
+                       Network.IRC.MessageBus,
                        Network.IRC.Protocol,
                        Network.IRC.Bot,
                        Network.IRC.Handlers.Core

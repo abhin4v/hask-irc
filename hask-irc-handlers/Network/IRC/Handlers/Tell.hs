@@ -6,13 +6,13 @@ module Network.IRC.Handlers.Tell (tellMsgHandlerMaker) where
 
 import qualified Data.IxSet as IS
 
-import ClassyPrelude hiding (swap)
-import Control.Monad.State  (get, put)
-import Data.Acid            (AcidState, Query, Update, makeAcidic, query, update,
-                             openLocalState, createArchive)
-import Data.Acid.Local      (createCheckpointAndClose)
-import Data.IxSet           ((@=))
-import Data.Text            (split, strip)
+import ClassyPrelude hiding       (swap)
+import Control.Monad.State.Strict (get, put)
+import Data.Acid                  (AcidState, Query, Update, makeAcidic, query, update,
+                                   openLocalState, createArchive)
+import Data.Acid.Local            (createCheckpointAndClose)
+import Data.IxSet                 ((@=))
+import Data.Text                  (split, strip)
 
 import Network.IRC
 import Network.IRC.Handlers.NickTracker.Types

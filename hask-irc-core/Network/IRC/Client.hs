@@ -1,6 +1,6 @@
 {-|
 Module      : Network.IRC.Client
-Description : The IRC bot client used to create and run the bot.
+Description : The IRC bot client used to create and run a bot.
 Copyright   : (c) Abhinav Sarkar, 2014
 License     : Apache-2.0
 Maintainer  : abhinav@abhinavsarkar.net

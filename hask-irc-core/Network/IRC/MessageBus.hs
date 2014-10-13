@@ -32,6 +32,7 @@ newtype MessageBus a = MessageBus (TChan a)
 newMessageBus :: IO (MessageBus a)
 newMessageBus = MessageBus <$> newBroadcastTChanIO
 
+-- | A channel through which messages are sent and received.
 data MessageChannel a = MessageChannel Latch (TChan a) (TChan a)
 
 newMessageChannel ::MessageBus a -> IO (MessageChannel a)
@@ -46,7 +47,10 @@ sendMessageSTM (MessageChannel _ _ wChan) = writeTChan wChan
 receiveMessageSTM :: MessageChannel a -> STM a
 receiveMessageSTM (MessageChannel _ rChan _) = readTChan rChan
 
-sendMessage :: MessageChannel a -> a -> IO ()
+-- | Sends a message through a message channel
+sendMessage :: MessageChannel a -- ^ The channel
+            -> a                -- ^ The message to send
+            -> IO ()
 sendMessage chan = atomically . sendMessageSTM chan
 
 receiveMessage :: MessageChannel a -> IO a

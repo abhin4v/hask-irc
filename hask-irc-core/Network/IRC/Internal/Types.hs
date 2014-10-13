@@ -8,9 +8,9 @@ module Network.IRC.Internal.Types where
 import qualified Data.Configurator as CF
 
 import ClassyPrelude
-import Control.Monad.Base      (MonadBase)
-import Control.Monad.State     (StateT, MonadState, execStateT)
-import Data.Configurator.Types (Config)
+import Control.Monad.Base         (MonadBase)
+import Control.Monad.State.Strict (StateT, MonadState, execStateT)
+import Data.Configurator.Types    (Config)
 
 import Network.IRC.Message.Types
 import Network.IRC.MessageBus
@@ -22,8 +22,7 @@ import Network.IRC.Util
 type MessageParserId = Text
 
 -- | A part of a mutlipart message.
-data MessagePart = MessagePart { msgPartParserId :: !MessageParserId
-                               , msgPartTarget   :: !Text
+data MessagePart = MessagePart { msgPartTarget   :: !Text
                                , msgPartTime     :: !UTCTime
                                , msgPartLine     :: !Text
                                } deriving (Eq, Show)
@@ -43,7 +42,7 @@ data MessageParser = MessageParser
 
 -- ** Command Formatting
 
--- | A command formatter which optinally formats commands to texts which are then send to the server.
+-- | A command formatter which optinally formats commands to texts which are then sent to the server.
 type CommandFormatter = BotConfig -> Message -> Maybe Text
 
 -- ** Bot
@@ -68,9 +67,9 @@ data BotConfig = BotConfig
   -- | Info about the message handlers. A map of message handler names to a map of all commands supported
   -- by that message handler to the help text of that command.
   , msgHandlerInfo   :: !(Map MsgHandlerName (Map Text Text))
-  -- | A list of 'MsgHandlerMaker's which are used to create message handlers for the bot.
+  -- | A map of message handler names to 'MsgHandlerMaker's which are used to create message handlers for the bot.
   , msgHandlerMakers :: !(Map MsgHandlerName MsgHandlerMaker)
-  -- | A list of extra message parsers. Note that these parsers will always be called after the built-in ones.
+  -- | A list of extra message parsers.
   , msgParsers       :: ![MessageParser]
   -- | A list of extra command formatters. Note that these formatters will always be called after the built-in ones.
   , cmdFormatters    :: ![CommandFormatter]
@@ -87,7 +86,7 @@ instance Show BotConfig where
                           "timeout = "  ++ show botTimeout               ++ "\n" ++
                           "handlers = " ++ show (mapKeys msgHandlerInfo) ++ " }"
 
--- | Creates a new bot config with essential fields leaving rest fields empty.
+-- | Creates a new bot config with essential fields leaving rest of the fields empty.
 newBotConfig :: Text       -- ^ server
              -> Int        -- ^ port
              -> Text       -- ^ channel
@@ -158,11 +157,11 @@ instance MonadMsgHandler MsgHandlerT where
 -- | A message handler containing actions which are invoked by the bot.
 data MsgHandler = MsgHandler
   {
-  -- | The action invoked when a message is received. It returns a list of commands in response
-  -- to the message which the bot sends to the server.
+  -- | The action invoked when a message is received. It returns a list of nessages in response
+  -- which the bot sends to the server.
     onMessage   :: !(forall m . MonadMsgHandler m => Message -> m [Message])
 
-  -- | The action invoked to stop the message handler.
+  -- | The action invoked when the message handler is stopped. Can use this for resource cleanup.
   , onStop      :: !(forall m . MonadMsgHandler m => m ())
 
   -- | The action invoked to get the map of the commands supported by the message handler and their help messages.
@@ -183,6 +182,7 @@ data MsgHandlerMaker = MsgHandlerMaker
   -- | The name of the message handler.
     msgHandlerName  :: !MsgHandlerName
   -- | The action which is invoked to create a new message handler.
+  -- Gets the bot config and the message channel used to receive messages.
   , msgHandlerMaker :: !(BotConfig -> MessageChannel Message -> IO MsgHandler)
   }
 

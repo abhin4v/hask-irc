@@ -7,11 +7,11 @@ import qualified Data.UUID    as U
 import qualified Data.UUID.V4 as U
 
 import ClassyPrelude
-import Control.Monad.Reader (asks)
-import Control.Monad.State  (get, put)
-import Data.Acid            (AcidState, Query, Update, makeAcidic, query, update,
-                             openLocalState, createArchive)
-import Data.Acid.Local      (createCheckpointAndClose)
+import Control.Monad.Reader       (asks)
+import Control.Monad.State.Strict (get, put)
+import Data.Acid                  (AcidState, Query, Update, makeAcidic, query, update,
+                                   openLocalState, createArchive)
+import Data.Acid.Local            (createCheckpointAndClose)
 
 import Network.IRC
 import Network.IRC.Handlers.Auth.Types

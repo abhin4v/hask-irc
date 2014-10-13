@@ -8,8 +8,10 @@ Stability   : experimental
 Portability : POSIX
 -}
 
-module Network.IRC (module IRC) where
+module Network.IRC
+  ( module Network.IRC.Types
+  , module Network.IRC.Client
+  ) where
 
-import Network.IRC.Types      as IRC
-import Network.IRC.Client     as IRC
-import Network.IRC.MessageBus as IRC
+import Network.IRC.Types
+import Network.IRC.Client

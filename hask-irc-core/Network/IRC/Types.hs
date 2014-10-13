@@ -15,6 +15,7 @@ module Network.IRC.Types
   , User (..)
   , MessageC (..)
   , Message (..)
+  , MessageW
   , newMessage
   , IdleMsg (..)
   , NickInUseMsg (..)
@@ -59,7 +60,11 @@ module Network.IRC.Types
   , MsgHandler (..)
   , newMsgHandler
   , MsgHandlerMaker (..)
+  -- * Message Channel
+  , MessageChannel
+  , sendMessage
   ) where
 
 import Network.IRC.Message.Types
 import Network.IRC.Internal.Types
+import Network.IRC.MessageBus

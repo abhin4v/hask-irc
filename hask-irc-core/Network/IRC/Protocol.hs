@@ -1,7 +1,4 @@
-module Network.IRC.Protocol
-  ( MessagePart (..)
-  , parseLine
-  , formatCommand) where
+module Network.IRC.Protocol (parseLine, formatCommand) where
 
 import ClassyPrelude
 import Data.Foldable (msum)
@@ -10,14 +7,15 @@ import Data.Text     (strip)
 
 import Network.IRC.Types
 
-parseLine :: BotConfig -> UTCTime -> Text -> [MessagePart] -> (Maybe Message, [MessagePart])
+parseLine :: BotConfig -> UTCTime -> Text -> Map MessageParserId [MessagePart]
+          -> ([Message], Map MessageParserId [MessagePart])
 parseLine botConfig@BotConfig { .. } time line msgParts =
-  fromMaybe (Nothing, msgParts) . msum . flip map parsers $ \MessageParser { .. } ->
-    let (parserMsgParts, otherParserMsgParts) = partition ((msgParserId ==) . msgPartParserId) msgParts
+  mconcat . flip map parsers $ \MessageParser { .. } ->
+    let parserMsgParts = concat . maybeToList $ lookup msgParserId msgParts
     in case msgParser botConfig time line parserMsgParts of
-         Reject                  -> Nothing
-         Partial msgParts'       -> Just (Nothing, msgParts' ++ otherParserMsgParts)
-         Done message' msgParts' -> Just (Just message', msgParts' ++ otherParserMsgParts)
+         Reject                 -> ([], (singletonMap msgParserId parserMsgParts))
+         Partial msgParts'      -> ([], (singletonMap msgParserId msgParts'))
+         Done message msgParts' -> ([message], (singletonMap msgParserId msgParts'))
   where
     parsers = [pingParser, namesParser, lineParser] ++ msgParsers ++ [defaultParser]
 
@@ -40,22 +38,23 @@ parseMsgLine line = (splits, command, source, target, message)
 lineParser :: MessageParser
 lineParser = MessageParser "line" go
   where
-    go BotConfig { .. } time line _ =
-      case command of
-        "PONG"    -> done $ toMessage $ PongMsg message
-        "JOIN"    -> done $ toMessage $ JoinMsg user
-        "QUIT"    -> done $ toMessage $ QuitMsg user quitMessage
-        "PART"    -> done $ toMessage $ PartMsg user message
-        "KICK"    -> done $ toMessage $ KickMsg user (Nick kicked) kickReason
-        "MODE"    -> done $ toMessage $ if Nick target == botNick
-                       then ModeMsg Self target message []
-                       else ModeMsg user target mode modeArgs
-        "NICK"    -> done $ toMessage $ NickMsg user $ Nick (drop 1 target)
-        "433"     -> done $ toMessage NickInUseMsg
-        "PRIVMSG" | target /= botChannel -> done $ toMessage $ PrivMsg user message
-                  | isActionMsg          -> done $ toMessage $ ActionMsg user (initDef . drop 8 $ message)
-                  | otherwise            -> done $ toMessage $ ChannelMsg user message
-        _         -> Reject
+    go BotConfig { .. } time line _
+      | "PING :" `isPrefixOf` line = Reject
+      | otherwise                  = case command of
+          "PONG"    -> done $ toMessage $ PongMsg message
+          "JOIN"    -> done $ toMessage $ JoinMsg user
+          "QUIT"    -> done $ toMessage $ QuitMsg user quitMessage
+          "PART"    -> done $ toMessage $ PartMsg user message
+          "KICK"    -> done $ toMessage $ KickMsg user (Nick kicked) kickReason
+          "MODE"    -> done $ toMessage $ if Nick target == botNick
+                         then ModeMsg Self target message []
+                         else ModeMsg user target mode modeArgs
+          "NICK"    -> done $ toMessage $ NickMsg user $ Nick (drop 1 target)
+          "433"     -> done $ toMessage NickInUseMsg
+          "PRIVMSG" | target /= botChannel -> done $ toMessage $ PrivMsg user message
+                    | isActionMsg          -> done $ toMessage $ ActionMsg user (initDef . drop 8 $ message)
+                    | otherwise            -> done $ toMessage $ ChannelMsg user message
+          _         -> Reject
       where
         done = flip Done [] . Message time line
 
@@ -71,22 +70,26 @@ lineParser = MessageParser "line" go
 defaultParser :: MessageParser
 defaultParser = MessageParser "default" go
   where
-    go _ time line _ = flip Done [] . Message time line $
-      toMessage $ OtherMsg source command target message
+    go _ time line _
+      | "PING :" `isPrefixOf` line = Reject
+      | otherwise                  =
+          flip Done [] . Message time line $ toMessage $ OtherMsg source command target message
       where
         (_, command, source, target, message) = parseMsgLine line
 
 namesParser :: MessageParser
 namesParser = MessageParser "names" go
   where
-    go BotConfig { .. } time line msgParts = case command of
-      "353" -> Partial $ MessagePart "names" target time line : msgParts
-      "366" -> let
-        (myMsgParts, otherMsgParts) = partition ((target ==) . msgPartTarget) msgParts
-        (nicks, allLines) =  concat *** intercalate "\r\n" . (++ [line])
-          $ unzip $ map (\MessagePart { .. } -> (namesNicks msgPartLine, msgPartLine)) myMsgParts
-        in Done (Message time allLines . toMessage $ NamesMsg nicks) otherMsgParts
-      _     -> Reject
+    go BotConfig { .. } time line msgParts
+      | "PING :" `isPrefixOf` line = Reject
+      | otherwise                  = case command of
+          "353" -> Partial $ MessagePart target time line : msgParts
+          "366" -> let
+            (myMsgParts, otherMsgParts) = partition ((target ==) . msgPartTarget) msgParts
+            (nicks, allLines) =  concat *** intercalate "\r\n" . (++ [line])
+              $ unzip $ map (\MessagePart { .. } -> (namesNicks msgPartLine, msgPartLine)) myMsgParts
+            in Done (Message time allLines . toMessage $ NamesMsg nicks) otherMsgParts
+          _     -> Reject
       where
         (_ : command : target : _) = words line
         stripNickPrefix  = pack . dropWhile (`elem` ("~&@%+" :: String)) . unpack

@@ -32,14 +32,15 @@ data User
   , userServer :: !Text       -- ^ The user's server.
   } deriving (Show, Eq, Ord)
 
--- | An IRC message sent from the server to the bot.
+-- | An message sent from the server to the bot or from the bot to the server
+-- or from a handler to another handler.
 data Message = Message
-  { msgTime :: !UTCTime  -- ^ The time when the message was received.
-  , msgLine :: !Text     -- ^ The raw message line.
+  { msgTime :: !UTCTime  -- ^ The time when the message was received/sent.
+  , msgLine :: !Text     -- ^ The raw message.
   , message :: MessageW  -- ^ The details of the parsed message.
   } deriving (Show, Eq)
 
--- | The typeclass for different types of IRC messages.
+-- | The typeclass for different types of messages.
 class (Typeable msg, Show msg, Eq msg, Ord msg) => MessageC msg where
   toMessage :: msg -> MessageW
   toMessage = MessageW
@@ -47,7 +48,7 @@ class (Typeable msg, Show msg, Eq msg, Ord msg) => MessageC msg where
   fromMessage :: MessageW -> Maybe msg
   fromMessage (MessageW msg) = cast msg
 
--- | A wrapper over all types of IRC messages.
+-- | A wrapper over all types of messages.
 data MessageW = forall m . MessageC m => MessageW m deriving (Typeable)
 
 instance Show MessageW where
@@ -58,7 +59,10 @@ instance Eq MessageW where
     Just m1' -> m1' == m2
     _        -> False
 
-newMessage :: (MessageC msg, MonadIO m) => msg -> m Message
+-- | Creates a new message with current time and empty raw message.
+newMessage :: (MessageC msg, MonadIO m)
+           => msg        -- ^ Message details
+           -> m Message
 newMessage msg = do
   t <- liftIO getCurrentTime
   return $ Message t "" (toMessage msg)

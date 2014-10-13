@@ -8,14 +8,14 @@ import qualified Data.IxSet        as IS
 import qualified Data.UUID         as U
 import qualified Data.UUID.V4      as U
 
-import ClassyPrelude hiding (swap)
-import Control.Monad.State  (get, put)
-import Data.Acid            (AcidState, Query, Update, makeAcidic, query, update,
-                             openLocalState, createArchive)
-import Data.Acid.Local      (createCheckpointAndClose)
-import Data.Convertible     (convert)
-import Data.IxSet           (getOne, (@=))
-import Data.Time            (addUTCTime, NominalDiffTime)
+import ClassyPrelude hiding       (swap)
+import Control.Monad.State.Strict (get, put)
+import Data.Acid                  (AcidState, Query, Update, makeAcidic, query, update,
+                                   openLocalState, createArchive)
+import Data.Acid.Local            (createCheckpointAndClose)
+import Data.Convertible           (convert)
+import Data.IxSet                 (getOne, (@=))
+import Data.Time                  (addUTCTime, NominalDiffTime)
 
 import Network.IRC
 import Network.IRC.Handlers.NickTracker.Internal.Types
@@ -113,13 +113,13 @@ handleNickChange state prevNick newNick msgTime = io $ do
   mpnt                     <- getByNick acid prevNick
   mnt                      <- getByNick acid newNick
   mInfo                    <- case (mpnt, mnt) of
-    (Nothing, _) -> newCanonicalNick >>= \cn -> return $ Just ("", cn, msgTime)
+    (Nothing, _)        -> newCanonicalNick >>= \cn -> return $ Just ("", cn, msgTime)
     (Just pnt, Nothing) ->
       return $ Just (lastMessage pnt, canonicalNick pnt, lastMessageOn pnt)
     (Just pnt, Just nt) | canonicalNick pnt == canonicalNick nt -> do
       let nt' = maximumByEx (comparing lastMessageOn) [pnt, nt]
       return $ Just (lastMessage nt', canonicalNick nt', lastMessageOn nt')
-    _ -> return Nothing
+    _                   -> return Nothing
 
   whenJust mInfo $ \(message, cn, lastMessageOn') ->
     saveNickTrack acid $ NickTrack newNick cn msgTime lastMessageOn' message

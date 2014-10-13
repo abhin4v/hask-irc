@@ -12,13 +12,13 @@ import qualified Data.Text.Format  as TF
 import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
-import Control.Concurrent.Lifted (threadDelay)
-import Control.Exception.Lifted  (mask_, mask)
-import Control.Monad.State       (get, put)
-import Data.Time                 (addUTCTime)
-import System.IO                 (hIsEOF)
-import System.Timeout            (timeout)
-import System.Log.Logger.TH      (deriveLoggers)
+import Control.Concurrent.Lifted  (threadDelay)
+import Control.Exception.Lifted   (mask_, mask)
+import Control.Monad.State.Strict (get, put, evalStateT)
+import Data.Time                  (addUTCTime)
+import System.IO                  (hIsEOF)
+import System.Timeout             (timeout)
+import System.Log.Logger.TH       (deriveLoggers)
 
 import Network.IRC.MessageBus
 import Network.IRC.Internal.Types
@@ -45,33 +45,40 @@ sendCommandLoop commandChan bot@Bot { .. } = do
       _            -> sendCommandLoop commandChan bot
 
 readMessageLoop :: MVar BotStatus -> MessageChannel In -> Bot -> Int -> IO ()
-readMessageLoop = go []
+readMessageLoop mvBotStatus inChan Bot { .. } timeoutDelay = evalStateT loop mempty
   where
     msgPartTimeout = 10
 
-    go !msgParts mvBotStatus inChan bot@Bot { .. } timeoutDelay = do
+    loop = do
+      msgParts  <- get
       botStatus <- readMVar mvBotStatus
       case botStatus of
-        Disconnected -> closeMessageChannel inChan
+        Disconnected -> io $ closeMessageChannel inChan
         _            -> do
-          mLine     <- try $ timeout timeoutDelay readLine
-          msgParts' <- case mLine of
-            Left (e :: SomeException)     -> do
-              errorM $ "Error while reading from connection: " ++ show e
-              sendMessage inChan EOD >> return msgParts
-            Right Nothing                 -> sendMessage inChan Timeout >> return msgParts
-            Right (Just (Line time line)) -> do
-              let (mmsg, msgParts') = parseLine botConfig time line msgParts
-              whenJust mmsg $ sendMessage inChan . Msg
-              return msgParts'
-            Right (Just EOS)              -> sendMessage inChan EOD >> return msgParts
+          msgParts' <- io $ do
+            mLine <- try $ timeout timeoutDelay readLine
+            case mLine of
+              Left (e :: SomeException)     -> do
+                errorM $ "Error while reading from connection: " ++ show e
+                sendMessage inChan EOD >> return msgParts
+              Right Nothing                 -> sendMessage inChan Timeout >> return msgParts
+              Right (Just (Line time line)) -> do
+                let (msgs, msgParts') = parseLine botConfig time line msgParts
+                forM_ msgs $ sendMessage inChan . Msg
+                return msgParts'
+              Right (Just EOS)              -> sendMessage inChan EOD >> return msgParts
 
-          limit <- map (addUTCTime (- msgPartTimeout)) getCurrentTime
-          let validMsgParts = concat
-                             . filter ((> limit) . msgPartTime . headEx . sortBy (flip $ comparing msgPartTime))
-                             . groupAllOn (msgPartParserId &&& msgPartTarget) $ msgParts'
-          go validMsgParts mvBotStatus inChan bot timeoutDelay
+          limit <- io $ map (addUTCTime (- msgPartTimeout)) getCurrentTime
+          put $ validMsgParts limit msgParts'
+          loop
       where
+        validMsgParts limit =
+          foldl' (\m (k, v) -> insertWith (++) k [v] m) mempty
+          . concat
+          . filter ((> limit) . msgPartTime . snd . headEx . sortBy (flip $ comparing (msgPartTime . snd)))
+          . groupAllOn (fst &&& msgPartTarget . snd)
+          . asList . concatMap (uncurry (map . (,))) . mapToList
+
         readLine = do
           eof <- hIsEOF botSocket
           if eof
@@ -83,9 +90,9 @@ readMessageLoop = go []
               return $ Line now line
 
 messageProcessLoop :: MessageChannel In -> MessageChannel Message -> IRC ()
-messageProcessLoop = go 0
+messageProcessLoop inChan messageChan = loop 0
   where
-    go !idleFor inChan messageChan = do
+    loop !idleFor = do
       status     <- get
       Bot { .. } <- ask
       let nick   = botNick botConfig
@@ -109,10 +116,10 @@ messageProcessLoop = go 0
 
       put nStatus
       case nStatus of
-        Idle             -> go (idleFor + oneSec) inChan messageChan
+        Idle             -> loop (idleFor + oneSec)
         Disconnected     -> return ()
         NickNotAvailable -> return ()
-        _                -> go 0 inChan messageChan
+        _                -> loop 0
 
       where
         handleMsg nick message mpass
