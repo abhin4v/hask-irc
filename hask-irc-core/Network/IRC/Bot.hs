@@ -61,16 +61,16 @@ sendCommandLoop commandChan bot@Bot { .. } = do
   forM_ exs $ \(ex :: SomeException) ->
     errorM ("Error while formatting command: " ++ show cmd ++ "\nError: " ++ show ex)
 
-  when (not . null $ lines_) $
+  unless (null lines_) $
     handle (\(e :: SomeException) -> do
               errorM ("Error while writing to connection: " ++ show e)
-              closeMessageChannel commandChan) $ do
+              closeMessageChannel commandChan) $
       forM_ lines_ $ \line -> do
         TF.hprint botSocket "{}\r\n" $ TF.Only line
         infoM . unpack $ "> " ++ line
 
   commandChanClosed <- isClosedMessageChannel commandChan
-  when (not commandChanClosed) $
+  unless commandChanClosed $
     case fromMessage cmd of
       Just QuitCmd -> closeMessageChannel commandChan
       _            -> sendCommandLoop commandChan bot

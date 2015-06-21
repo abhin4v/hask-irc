@@ -7,7 +7,6 @@ import qualified Data.Text.Format        as TF
 import qualified Data.Text.Format.Params as TF
 
 import ClassyPrelude hiding     ((</>), (<.>), FilePath, log)
-import Control.Exception.Lifted (mask_)
 import Data.Time                (diffDays)
 import System.Directory         (createDirectoryIfMissing, getModificationTime, copyFile, removeFile)
 import System.FilePath          (FilePath, (</>), (<.>))
