@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts, TemplateHaskell #-}
 
 module Network.IRC.Bot
   ( In
@@ -13,7 +13,7 @@ import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
 import Control.Concurrent.Lifted  (threadDelay)
-import Control.Exception.Lifted   (mask_, mask)
+import Control.Exception.Lifted   (evaluate)
 import Control.Monad.State.Strict (get, put, evalStateT)
 import Data.Time                  (addUTCTime)
 import System.IO                  (hIsEOF)
@@ -31,15 +31,46 @@ $(deriveLoggers "HSL" [HSL.INFO, HSL.ERROR])
 data RawIn = Line !UTCTime !Text | EOS deriving (Show, Eq)
 data In    = Timeout | EOD | Msg !Message deriving (Show, Eq)
 
+formatCommand :: (Exception e) => BotConfig -> Message -> IO ([e], [Text])
+formatCommand botConfig@BotConfig { .. } message =
+  map (second catMaybes . partitionEithers)
+  . forM (defaultCommandFormatter : cmdFormatters) $ \formatter ->
+      try . evaluate $ formatter botConfig message
+
+parseLine :: (Exception e)
+          => BotConfig -> UTCTime -> Text -> Map MessageParserId [MessagePart]
+          -> IO ([e], [Message], Map MessageParserId [MessagePart])
+parseLine botConfig@BotConfig { .. } time line msgParts =
+  map mconcat . forM parsers $ \MessageParser { .. } -> do
+    let parserMsgParts    = concat . maybeToList $ lookup msgParserId msgParts
+    let parserMsgPartsMap = singletonMap msgParserId parserMsgParts
+    eresult <- try . evaluate $ msgParser botConfig time line parserMsgParts
+    return $ case eresult of
+      Left e                              -> ([e], []       , parserMsgPartsMap)
+      Right ParseReject                   -> ([] , []       , parserMsgPartsMap)
+      Right (ParsePartial msgParts')      -> ([] , []       , singletonMap msgParserId msgParts')
+      Right (ParseDone message msgParts') -> ([] , [message], singletonMap msgParserId msgParts')
+  where
+    parsers = defaultParsers ++ msgParsers
+
 sendCommandLoop :: MessageChannel Message -> Bot -> IO ()
 sendCommandLoop commandChan bot@Bot { .. } = do
   msg@(Message _ _ cmd) <- receiveMessage commandChan
-  let mline = formatCommand botConfig msg
-  handle (\(e :: SomeException) ->
-            errorM ("Error while writing to connection: " ++ show e) >> closeMessageChannel commandChan) $ do
-    whenJust mline $ \line -> do
-      TF.hprint botSocket "{}\r\n" $ TF.Only line
-      infoM . unpack $ "> " ++ line
+  (exs, lines_) <- formatCommand botConfig msg
+
+  forM_ exs $ \(ex :: SomeException) ->
+    errorM ("Error while formatting command: " ++ show cmd ++ "\nError: " ++ show ex)
+
+  when (not . null $ lines_) $
+    handle (\(e :: SomeException) -> do
+              errorM ("Error while writing to connection: " ++ show e)
+              closeMessageChannel commandChan) $ do
+      forM_ lines_ $ \line -> do
+        TF.hprint botSocket "{}\r\n" $ TF.Only line
+        infoM . unpack $ "> " ++ line
+
+  commandChanClosed <- isClosedMessageChannel commandChan
+  when (not commandChanClosed) $
     case fromMessage cmd of
       Just QuitCmd -> closeMessageChannel commandChan
       _            -> sendCommandLoop commandChan bot
@@ -63,8 +94,12 @@ readMessageLoop mvBotStatus inChan Bot { .. } timeoutDelay = evalStateT loop mem
                 sendMessage inChan EOD >> return msgParts
               Right Nothing                 -> sendMessage inChan Timeout >> return msgParts
               Right (Just (Line time line)) -> do
-                let (msgs, msgParts') = parseLine botConfig time line msgParts
+                (exs, msgs, msgParts') <- parseLine botConfig time line msgParts
+
+                forM_ exs $ \(ex :: SomeException) ->
+                  errorM ("Error while parsing line: " ++ unpack line ++ "\nError: " ++ show ex)
                 forM_ msgs $ sendMessage inChan . Msg
+
                 return msgParts'
               Right (Just EOS)              -> sendMessage inChan EOD >> return msgParts
 

@@ -12,7 +12,8 @@ module Network.IRC.MessageBus
   , receiveMessage
   , receiveMessageEither
   , closeMessageChannel
-  , awaitMessageChannel ) where
+  , awaitMessageChannel
+  , isClosedMessageChannel ) where
 
 import ClassyPrelude
 
@@ -26,6 +27,9 @@ doLatch (Latch mv) = putMVar mv ()
 
 awaitLatch :: Latch -> IO ()
 awaitLatch (Latch mv) = void $ takeMVar mv
+
+latched :: Latch -> IO Bool
+latched (Latch mv) = map isJust . tryReadMVar $ mv
 
 newtype MessageBus a = MessageBus (TChan a)
 
@@ -61,6 +65,9 @@ closeMessageChannel (MessageChannel latch _ _) = doLatch latch
 
 awaitMessageChannel :: MessageChannel a -> IO ()
 awaitMessageChannel (MessageChannel latch _ _) = awaitLatch latch
+
+isClosedMessageChannel :: MessageChannel a -> IO Bool
+isClosedMessageChannel (MessageChannel latch _ _) = latched latch
 
 receiveMessageEither :: MessageChannel a -> MessageChannel b -> IO (Either a b)
 receiveMessageEither chan1 chan2 = atomically $

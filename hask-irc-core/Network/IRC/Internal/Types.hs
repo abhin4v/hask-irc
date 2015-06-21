@@ -29,9 +29,9 @@ data MessagePart = MessagePart { msgPartTarget   :: !Text
 
 -- | The result of parsing a message line.
 data MessageParseResult =
-    Done !Message ![MessagePart]  -- ^ A fully parsed message and leftover message parts.
-  | Partial ![MessagePart]        -- ^ A partial message with message parts received yet.
-  | Reject                        -- ^ Returned if a message line cannot be parsed by a particular parser.
+    ParseDone !Message ![MessagePart]  -- ^ A fully parsed message and leftover message parts.
+  | ParsePartial ![MessagePart]        -- ^ A partial message with message parts received yet.
+  | ParseReject                        -- ^ Returned if a message line cannot be parsed by a particular parser.
   deriving (Eq, Show)
 
 -- | A message parser used for parsing text lines from the server to 'Message's.
@@ -59,6 +59,7 @@ data BotConfig = BotConfig
   , botPort          :: !Int
   -- | The channel to join.
   , botChannel       :: !Text
+  -- | Original nick of the bot.
   , botOrigNick      :: !Nick
   -- | Current nick of the bot.
   , botNick          :: !Nick

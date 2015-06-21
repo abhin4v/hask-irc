@@ -37,7 +37,7 @@ data User
 data Message = Message
   { msgTime :: !UTCTime  -- ^ The time when the message was received/sent.
   , msgLine :: !Text     -- ^ The raw message.
-  , message :: MessageW  -- ^ The details of the parsed message.
+  , message :: !MessageW  -- ^ The details of the parsed message.
   } deriving (Show, Eq)
 
 -- | The typeclass for different types of messages.
@@ -49,7 +49,7 @@ class (Typeable msg, Show msg, Eq msg, Ord msg) => MessageC msg where
   fromMessage (MessageW msg) = cast msg
 
 -- | A wrapper over all types of messages.
-data MessageW = forall m . MessageC m => MessageW m deriving (Typeable)
+data MessageW = forall m . MessageC m => MessageW !m deriving (Typeable)
 
 instance Show MessageW where
   show (MessageW m) = show m
@@ -121,8 +121,11 @@ data KickMsg       = KickMsg { kickUser :: !User, kickedNick :: !Nick, kickMsg :
 instance MessageC KickMsg
 
 -- | A /MODE/ message received when a user's mode changes.
-data ModeMsg       = ModeMsg { modeUser :: !User, modeTarget :: !Text, mode :: !Text , modeArgs :: ![Text] }
-                    deriving (Typeable, Show, Eq, Ord)
+data ModeMsg       = ModeMsg { modeUser   :: !User
+                             , modeTarget :: !Text
+                             , mode       :: !Text
+                             , modeArgs   :: ![Text]
+                             } deriving (Typeable, Show, Eq, Ord)
 instance MessageC ModeMsg
 
 data WhoisReplyMsg = WhoisNoSuchNick { whoisNick :: !Nick }
@@ -138,8 +141,11 @@ data WhoisReplyMsg = WhoisNoSuchNick { whoisNick :: !Nick }
 instance MessageC WhoisReplyMsg
 
 -- | All other messages which are not parsed as any of the above types.
-data OtherMsg     = OtherMsg { msgSource :: !Text, msgCommand :: !Text, msgTarget :: !Text , msg :: !Text }
-                    deriving (Typeable, Show, Eq, Ord)
+data OtherMsg      = OtherMsg { msgSource  :: !Text
+                              , msgCommand :: !Text
+                              , msgTarget  :: !Text
+                              , msg        :: !Text
+                              } deriving (Typeable, Show, Eq, Ord)
 instance MessageC OtherMsg
 
 
