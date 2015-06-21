@@ -2,6 +2,7 @@ module Network.IRC.Protocol (parseLine, formatCommand) where
 
 import ClassyPrelude
 import Data.Foldable (msum)
+import Data.Maybe    (fromJust)
 import Data.List     ((!!))
 import Data.Text     (strip)
 
@@ -17,7 +18,7 @@ parseLine botConfig@BotConfig { .. } time line msgParts =
          Partial msgParts'      -> ([], (singletonMap msgParserId msgParts'))
          Done message msgParts' -> ([message], (singletonMap msgParserId msgParts'))
   where
-    parsers = [pingParser, namesParser, lineParser] ++ msgParsers ++ [defaultParser]
+    parsers = [pingParser, namesParser, whoisParser, lineParser] ++ msgParsers ++ [defaultParser]
 
 pingParser :: MessageParser
 pingParser = MessageParser "ping" go
@@ -91,10 +92,44 @@ namesParser = MessageParser "names" go
             in Done (Message time allLines . toMessage $ NamesMsg nicks) otherMsgParts
           _     -> Reject
       where
-        (_ : command : target : _) = words line
+        (_, command, _ , target, _) = parseMsgLine line
         stripNickPrefix  = pack . dropWhile (`elem` ("~&@%+" :: String)) . unpack
         namesNicks line' =
           map (Nick . stripNickPrefix) . words . drop 1 . unwords . drop 5 . words $ line'
+
+whoisParser :: MessageParser
+whoisParser = MessageParser "whois" go
+  where
+    go BotConfig { .. } time line msgParts
+      | "PING :" `isPrefixOf` line = Reject
+      | command `elem` ["401", "311", "319", "312", "317"] =
+          Partial $ MessagePart target time line : msgParts
+      | command == "318" = let
+          (myMsgParts, otherMsgParts) = partition ((target ==) . msgPartTarget) msgParts
+          allLines = intercalate "\r\n" . reverse . (line :) . map msgPartLine $ myMsgParts
+          in Done (Message time allLines . toMessage $ parse myMsgParts) otherMsgParts
+      | otherwise = Reject
+      where
+        (_, command, _, target, _) = parseMsgLine line
+
+    parse :: [MessagePart] -> WhoisReplyMsg
+    parse myMsgParts =
+      let partMap = asMap $ foldl' (\m MessagePart { .. } ->
+                                      insertMap (words msgPartLine !! 1) msgPartLine m)
+                                   mempty myMsgParts
+      in case lookup "401" partMap of
+           Just line -> WhoisNoSuchNick . Nick $ words line !! 3
+           Nothing   -> let
+               splits311   = words . fromJust . lookup "311" $ partMap
+               nick        = Nick (splits311 !! 3)
+               user        = splits311 !! 4
+               host        = splits311 !! 5
+               realName    = drop 1 $ splits311 !! 7
+               channels    = mconcat . maybeToList . map (words . drop 1 . unwords . drop 4 . words) . lookup "319" $ partMap
+               splits312   = words . fromJust . lookup "312" $ partMap
+               server      = splits312 !! 4
+               serverInfo  = drop 1 $ splits312 !! 5
+             in WhoisReplyMsg nick user host realName channels server serverInfo
 
 formatCommand :: CommandFormatter
 formatCommand botConfig@BotConfig { .. } message =
@@ -102,13 +137,14 @@ formatCommand botConfig@BotConfig { .. } message =
 
 defaultCommandFormatter :: CommandFormatter
 defaultCommandFormatter BotConfig { .. } Message { .. }
-  | Just (PongCmd msg) <- fromMessage message = Just $ "PONG :" ++ msg
-  | Just (PingCmd msg) <- fromMessage message = Just $ "PING :" ++ msg
-  | Just NickCmd       <- fromMessage message = Just $ "NICK " ++ botNick'
-  | Just UserCmd       <- fromMessage message = Just $ "USER " ++ botNick' ++ " 0 * :" ++ botNick'
-  | Just JoinCmd       <- fromMessage message = Just $ "JOIN " ++ botChannel
-  | Just QuitCmd       <- fromMessage message = Just "QUIT"
-  | Just NamesCmd      <- fromMessage message = Just $ "NAMES " ++ botChannel
+  | Just (PongCmd msg)   <- fromMessage message = Just $ "PONG :" ++ msg
+  | Just (PingCmd msg)   <- fromMessage message = Just $ "PING :" ++ msg
+  | Just NickCmd         <- fromMessage message = Just $ "NICK " ++ botNick'
+  | Just UserCmd         <- fromMessage message = Just $ "USER " ++ botNick' ++ " 0 * :" ++ botNick'
+  | Just JoinCmd         <- fromMessage message = Just $ "JOIN " ++ botChannel
+  | Just QuitCmd         <- fromMessage message = Just "QUIT"
+  | Just NamesCmd        <- fromMessage message = Just $ "NAMES " ++ botChannel
+  | Just (WhoisCmd nick) <- fromMessage message = Just $ "WHOIS " ++ nick
   | Just (ChannelMsgReply msg) <- fromMessage message            =
       Just $ "PRIVMSG " ++ botChannel ++ " :" ++ msg
   | Just (PrivMsgReply (User { .. }) msg) <- fromMessage message =

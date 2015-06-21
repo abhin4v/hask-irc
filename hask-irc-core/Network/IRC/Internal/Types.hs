@@ -59,7 +59,8 @@ data BotConfig = BotConfig
   , botPort          :: !Int
   -- | The channel to join.
   , botChannel       :: !Text
-  -- | Nick of the bot.
+  , botOrigNick      :: !Nick
+  -- | Current nick of the bot.
   , botNick          :: !Nick
   -- | The timeout in seconds after which bot automatically disconnects and tries to reconnect.
   -- Should be few seconds more than the ping timeout of the server.
@@ -94,7 +95,7 @@ newBotConfig :: Text       -- ^ server
              -> Int        -- ^ botTimeout
              -> BotConfig
 newBotConfig server port channel botNick botTimeout =
-  BotConfig server port channel botNick botTimeout mempty mempty [] [] CF.empty
+  BotConfig server port channel botNick botNick botTimeout mempty mempty [] [] CF.empty
 
 -- | The bot.
 data Bot = Bot
@@ -116,7 +117,8 @@ data BotStatus = Connected               -- ^ Connected to the server
                | Idle                    -- ^ No communication with the server. The bot is idle.
                                          -- If the bot stays idle for 'botTimeout' seconds, it disconnects.
                | Interrupted             -- ^ Interrupted using external signals like SIGINT.
-               | NickNotAvailable        -- ^ Bot's nick already taken on the server.
+               | NickNotAvailable        -- ^ Bot's current nick already taken on the server.
+               | NickAvailable           -- ^ Bot's original nick is available on the server.
                deriving (Show, Eq, Ord)
 
 -- | An IRC action to be run.

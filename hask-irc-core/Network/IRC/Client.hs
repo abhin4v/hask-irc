@@ -71,7 +71,7 @@ connect botConfig@BotConfig { .. } = do
   where
     connectToWithRetry = connectTo (unpack botServer) (PortNumber (fromIntegral botPort))
                            `catch` (\(e :: SomeException) -> do
-                                      errorM ("Error while connecting: " ++ show e ++ ". Waiting.")
+                                      errorM ("Error while connecting: " ++ show e ++ ". Retrying.")
                                       threadDelay (5 * oneSec)
                                       connectToWithRetry)
 
@@ -110,10 +110,11 @@ runBotIntenal :: BotConfig -> IO ()
 runBotIntenal botConfig' = withSocketsDo $ do
   status <- run
   case status of
-    Disconnected     -> debugM "Restarting .."   >> runBotIntenal botConfigWithCore
-    Errored          -> debugM "Restarting .."   >> runBotIntenal botConfigWithCore
+    Disconnected     -> debugM "Restarting .."        >> runBotIntenal botConfigWithCore
+    Errored          -> debugM "Restarting .."        >> runBotIntenal botConfigWithCore
+    NickNotAvailable -> debugM "Trying new nick"      >> runBotIntenal botConfigWithNewNick
+    NickAvailable    -> debugM "Trying original nick" >> runBotIntenal botConfigWithOrigNick
     Interrupted      -> return ()
-    NickNotAvailable -> debugM "Trying new nick" >> runBotIntenal botConfigWithNewNick
     _                -> error "Unsupported status"
   where
     botConfigWithCore = botConfig' {
@@ -125,6 +126,10 @@ runBotIntenal botConfig' = withSocketsDo $ do
 
     botConfigWithNewNick = botConfigWithCore {
       botNick = Nick $ nickToText (botNick botConfigWithCore) ++ "_"
+    }
+
+    botConfigWithOrigNick = botConfigWithCore {
+      botNick = botOrigNick botConfigWithCore
     }
 
     handleErrors :: SomeException -> IO BotStatus

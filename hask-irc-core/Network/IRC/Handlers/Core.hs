@@ -10,7 +10,7 @@ import Network.IRC.Util
 coreMsgHandlerMakers :: Map MsgHandlerName MsgHandlerMaker
 coreMsgHandlerMakers = mapFromList [
     ("pingpong", pingPongMsgHandlerMaker)
-  , ("help", helpMsgHandlerMaker)
+  , ("help"    , helpMsgHandlerMaker)
   ]
 
 pingPongMsgHandlerMaker :: MsgHandlerMaker
@@ -23,8 +23,8 @@ pingPongMsgHandlerMaker = MsgHandlerMaker "pingpong" go
 helpMsgHandlerMaker :: MsgHandlerMaker
 helpMsgHandlerMaker = MsgHandlerMaker "help" go
   where
-    go _ _ = return $ newMsgHandler { onMessage = help
-                                    , handlerHelp  = return $ singletonMap "!help" helpMsg }
+    go _ _ = return $ newMsgHandler { onMessage   = help
+                                    , handlerHelp = return $ singletonMap "!help" helpMsg }
     helpMsg = "Get help. !help or !help <command>"
 
 pingPong :: MonadMsgHandler m => IORef UTCTime -> Message -> m [Message]

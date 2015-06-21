@@ -93,10 +93,11 @@ messageProcessLoop :: MessageChannel In -> MessageChannel Message -> IRC ()
 messageProcessLoop inChan messageChan = loop 0
   where
     loop !idleFor = do
-      status     <- get
-      Bot { .. } <- ask
-      let nick   = botNick botConfig
-      mpass      <- io $ CF.lookup (config botConfig) "password"
+      status       <- get
+      Bot { .. }   <- ask
+      let nick     = botNick botConfig
+      let origNick = botOrigNick botConfig
+      mpass        <- io $ CF.lookup (config botConfig) "password"
 
       nStatus <- io . mask_ $
         if idleFor >= (oneSec * botTimeout botConfig)
@@ -107,10 +108,14 @@ messageProcessLoop inChan messageChan = loop 0
 
             mIn <- receiveMessage inChan
             case mIn of
-              Timeout -> newMessage IdleMsg >>= sendMessage messageChan >> return Idle
+              Timeout -> do
+                idleMsg <- newMessage IdleMsg
+                sendMessage messageChan idleMsg
+                sendWhoisMessage nick origNick
+                return Idle
               EOD     -> infoM "Connection closed" >> return Disconnected
               Msg (msg@Message { .. }) -> do
-                nStatus <- handleMsg nick message mpass
+                nStatus <- handleMsg nick origNick message mpass
                 sendMessage messageChan msg
                 return nStatus
 
@@ -119,21 +124,28 @@ messageProcessLoop inChan messageChan = loop 0
         Idle             -> loop (idleFor + oneSec)
         Disconnected     -> return ()
         NickNotAvailable -> return ()
+        NickAvailable    -> return ()
         _                -> loop 0
 
       where
-        handleMsg nick message mpass
-          | Just (JoinMsg user)   <- fromMessage message, userNick user == nick =
+        sendWhoisMessage nick origNick =
+          when (nick /= origNick && idleFor /= 0 && idleFor `mod` (10 * oneSec) == 0) $
+            (newMessage . WhoisCmd . nickToText $ origNick) >>= sendMessage messageChan
+
+        handleMsg nick origNick message mpass
+          | Just (JoinMsg user)     <- fromMessage message, userNick user == nick =
               infoM "Joined" >> return Joined
-          | Just (KickMsg { .. }) <- fromMessage message, kickedNick == nick    =
+          | Just (KickMsg { .. })   <- fromMessage message, kickedNick == nick    =
               infoM "Kicked" >> return Kicked
-          | Just NickInUseMsg     <- fromMessage message                        =
+          | Just NickInUseMsg       <- fromMessage message                        =
               infoM "Nick already in use" >> return NickNotAvailable
-          | Just (ModeMsg { .. }) <- fromMessage message, modeUser == Self      = do
+          | Just (ModeMsg { .. })   <- fromMessage message, modeUser == Self      = do
               whenJust mpass $ \pass -> do
                 msg <- newMessage $ PrivMsgReply (User (Nick "NickServ") "") $ "IDENTIFY " ++ pass
                 sendMessage messageChan msg
               newMessage JoinCmd >>= sendMessage messageChan
               return Connected
-          | otherwise                                                           =
+          | Just (WhoisNoSuchNick n) <- fromMessage message, n == origNick        =
+              infoM "Original nick available" >> return NickAvailable
+          | otherwise                                                             =
               return Connected

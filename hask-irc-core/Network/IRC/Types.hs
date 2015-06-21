@@ -31,6 +31,7 @@ module Network.IRC.Types
   , NickMsg (..)
   , KickMsg (..)
   , ModeMsg (..)
+  , WhoisReplyMsg (..)
   , OtherMsg (..)
   -- * IRC Commands
   , PingCmd (..)
@@ -42,6 +43,7 @@ module Network.IRC.Types
   , JoinCmd (..)
   , QuitCmd (..)
   , NamesCmd (..)
+  , WhoisCmd (..)
   -- * Message Parsing
   , MessageParserId
   , MessagePart (..)
