@@ -123,7 +123,7 @@ whoisParser = MessageParser "whois" go
                             $ partMap
                splits312   = words . fromJust . lookup "312" $ partMap
                server      = splits312 !! 4
-               serverInfo  = drop 1 $ splits312 !! 5
+               serverInfo  = drop 1 . unwords . drop 5 $ splits312
              in WhoisReplyMsg nick user host realName channels server serverInfo
 
 defaultParsers :: [MessageParser]

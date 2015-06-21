@@ -42,7 +42,7 @@ data MessageParser = MessageParser
 
 -- ** Command Formatting
 
--- | A command formatter which optinally formats commands to texts which are then sent to the server.
+-- | A command formatter which optionally formats commands to texts which are then sent to the server.
 type CommandFormatter = BotConfig -> Message -> Maybe Text
 
 -- ** Bot
@@ -118,7 +118,7 @@ data BotStatus = Connected               -- ^ Connected to the server
                | Idle                    -- ^ No communication with the server. The bot is idle.
                                          -- If the bot stays idle for 'botTimeout' seconds, it disconnects.
                | Interrupted             -- ^ Interrupted using external signals like SIGINT.
-               | NickNotAvailable        -- ^ Bot's current nick already taken on the server.
+               | NickNotAvailable        -- ^ Bot's current nick is already taken on the server.
                | NickAvailable           -- ^ Bot's original nick is available on the server.
                deriving (Show, Eq, Ord)
 

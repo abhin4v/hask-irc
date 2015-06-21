@@ -35,8 +35,8 @@ data User
 -- | An message sent from the server to the bot or from the bot to the server
 -- or from a handler to another handler.
 data Message = Message
-  { msgTime :: !UTCTime  -- ^ The time when the message was received/sent.
-  , msgLine :: !Text     -- ^ The raw message.
+  { msgTime :: !UTCTime   -- ^ The time when the message was received/sent.
+  , msgLine :: !Text      -- ^ The raw message.
   , message :: !MessageW  -- ^ The details of the parsed message.
   } deriving (Show, Eq)
 
@@ -59,7 +59,7 @@ instance Eq MessageW where
     Just m1' -> m1' == m2
     _        -> False
 
--- | Creates a new message with current time and empty raw message.
+-- | Creates a new message with the current time and the given message details.
 newMessage :: (MessageC msg, MonadIO m)
            => msg        -- ^ Message details
            -> m Message
@@ -128,6 +128,7 @@ data ModeMsg       = ModeMsg { modeUser   :: !User
                              } deriving (Typeable, Show, Eq, Ord)
 instance MessageC ModeMsg
 
+-- | A message received as a response to a 'WhoisCmd'.
 data WhoisReplyMsg = WhoisNoSuchNick { whoisNick :: !Nick }
                    | WhoisReplyMsg {
                        whoisNick        :: !Nick
@@ -140,7 +141,7 @@ data WhoisReplyMsg = WhoisNoSuchNick { whoisNick :: !Nick }
                      } deriving (Typeable, Show, Eq, Ord)
 instance MessageC WhoisReplyMsg
 
--- | All other messages which are not parsed as any of the above types.
+-- | All other messages which are not parsed as any of the above message types.
 data OtherMsg      = OtherMsg { msgSource  :: !Text
                               , msgCommand :: !Text
                               , msgTarget  :: !Text
@@ -185,5 +186,6 @@ instance MessageC QuitCmd
 data NamesCmd        = NamesCmd deriving (Typeable, Show, Eq, Ord)
 instance MessageC NamesCmd
 
-data WhoisCmd       = WhoisCmd !Text deriving (Typeable, Show, Eq, Ord)
+-- | A /WHOIS/ command sent to ask for the status of a user nick.
+data WhoisCmd        = WhoisCmd !Text deriving (Typeable, Show, Eq, Ord)
 instance MessageC WhoisCmd

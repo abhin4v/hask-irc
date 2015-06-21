@@ -51,7 +51,7 @@ sendMessageSTM (MessageChannel _ _ wChan) = writeTChan wChan
 receiveMessageSTM :: MessageChannel a -> STM a
 receiveMessageSTM (MessageChannel _ rChan _) = readTChan rChan
 
--- | Sends a message through a message channel
+-- | Sends a message through a message channel.
 sendMessage :: MessageChannel a -- ^ The channel
             -> a                -- ^ The message to send
             -> IO ()
