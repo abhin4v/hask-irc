@@ -43,13 +43,13 @@ data Message = Message
 -- | The typeclass for different types of messages.
 class (Typeable msg, Show msg, Eq msg, Ord msg) => MessageC msg where
   toMessage :: msg -> MessageW
-  toMessage = MessageW
+  toMessage !msg = MessageW msg
 
   fromMessage :: MessageW -> Maybe msg
   fromMessage (MessageW msg) = cast msg
 
 -- | A wrapper over all types of messages.
-data MessageW = forall m . MessageC m => MessageW !m deriving (Typeable)
+data MessageW = forall m . MessageC m => MessageW m deriving (Typeable)
 
 instance Show MessageW where
   show (MessageW m) = show m
