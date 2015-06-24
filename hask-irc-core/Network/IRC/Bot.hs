@@ -7,7 +7,6 @@ module Network.IRC.Bot
   , messageProcessLoop )
 where
 
-import qualified Data.Configurator as CF
 import qualified Data.Text.Format  as TF
 import qualified System.Log.Logger as HSL
 
@@ -20,6 +19,7 @@ import System.IO                  (hIsEOF)
 import System.Timeout             (timeout)
 import System.Log.Logger.TH       (deriveLoggers)
 
+import qualified Network.IRC.Configuration as CF
 import Network.IRC.MessageBus
 import Network.IRC.Internal.Types
 import Network.IRC.Protocol
@@ -132,7 +132,7 @@ messageProcessLoop inChan messageChan = loop 0
       Bot { .. }   <- ask
       let nick     = botNick botConfig
       let origNick = botOrigNick botConfig
-      mpass        <- io $ CF.lookup (config botConfig) "password"
+      let mpass    = CF.lookup "password" (config botConfig)
 
       nStatus <- io . mask_ $
         if idleFor >= (oneSec * botTimeout botConfig)
@@ -143,12 +143,12 @@ messageProcessLoop inChan messageChan = loop 0
 
             mIn <- receiveMessage inChan
             case mIn of
-              Timeout -> do
+              Timeout                  -> do
                 idleMsg <- newMessage IdleMsg
                 sendMessage messageChan idleMsg
                 sendWhoisMessage nick origNick
                 return Idle
-              EOD     -> infoM "Connection closed" >> return Disconnected
+              EOD                      -> infoM "Connection closed" >> return Disconnected
               Msg (msg@Message { .. }) -> do
                 nStatus <- handleMsg nick origNick message mpass
                 sendMessage messageChan msg

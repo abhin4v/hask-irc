@@ -3,7 +3,6 @@
 
 module Network.IRC.Handlers.SongSearch (songSearchMsgHandlerMaker) where
 
-import qualified Data.Configurator as CF
 import qualified System.Log.Logger as HSL
 
 import ClassyPrelude
@@ -15,6 +14,7 @@ import Network.Curl.Aeson       (curlAesonGet, CurlAesonException)
 import Network.HTTP.Base        (urlEncode)
 import System.Log.Logger.TH     (deriveLoggers)
 
+import qualified Network.IRC.Configuration as CF
 import Network.IRC
 
 $(deriveLoggers "HSL" [HSL.ERROR])
@@ -42,15 +42,15 @@ songSearch Message { .. }
   , "!m " `isPrefixOf` msg = do
       BotConfig { .. } <- ask
       liftIO $ do
-        let query = strip . drop 3 $ msg
-        mApiKey   <- CF.lookup config "songsearch.tinysong_apikey"
-        reply     <- map ChannelMsgReply $ case mApiKey of
+        let query   = strip . drop 3 $ msg
+        let mApiKey = CF.lookup "songsearch.tinysong_apikey" config
+        reply       <- map ChannelMsgReply $ case mApiKey of
           Nothing     -> do
             errorM "tinysong api key not found in config"
             return $ "Error while searching for " ++ query
-          Just apiKey -> do
+          Just (apiKey :: Text) -> do
             let apiUrl = "http://tinysong.com/b/" ++ urlEncode (unpack query)
-                          ++ "?format=json&key=" ++ apiKey
+                          ++ "?format=json&key=" ++ unpack apiKey
 
             result <- try $ curlAesonGet apiUrl >>= evaluate
             case result of

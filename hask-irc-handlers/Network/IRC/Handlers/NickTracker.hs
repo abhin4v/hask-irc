@@ -3,7 +3,6 @@
 
 module Network.IRC.Handlers.NickTracker (nickTrackerMsgHandlerMaker) where
 
-import qualified Data.Configurator as CF
 import qualified Data.IxSet        as IS
 import qualified Data.UUID         as U
 import qualified Data.UUID.V4      as U
@@ -17,6 +16,7 @@ import Data.Convertible           (convert)
 import Data.IxSet                 (getOne, (@=))
 import Data.Time                  (addUTCTime, NominalDiffTime)
 
+import qualified Network.IRC.Configuration as CF
 import Network.IRC
 import Network.IRC.Handlers.NickTracker.Internal.Types
 import Network.IRC.Util
@@ -193,9 +193,9 @@ nickTrackerMsgHandlerMaker = MsgHandlerMaker "nicktracker" go
 
     go BotConfig { .. } _ = do
       state <- io $ do
-        now             <- getCurrentTime
-        refreshInterval <- map convert (CF.lookupDefault 60 config "nicktracker.refresh_interval" :: IO Int)
-        acid            <- openLocalState emptyNickTracking
+        now                 <- getCurrentTime
+        let refreshInterval = convert (CF.lookupDefault "nicktracker.refresh_interval" config 60 :: Int)
+        acid                <- openLocalState emptyNickTracking
         newIORef (NickTrackingState acid refreshInterval mempty now)
       return $ newMsgHandler { onMessage   = nickTrackerMsg state
                              , onStop      = stopNickTracker state

@@ -5,13 +5,11 @@
 
 module Network.IRC.Internal.Types where
 
-import qualified Data.Configurator as CF
-
 import ClassyPrelude
 import Control.Monad.Base         (MonadBase)
 import Control.Monad.State.Strict (StateT, MonadState, execStateT)
-import Data.Configurator.Types    (Config)
 
+import qualified Network.IRC.Configuration as CF
 import Network.IRC.Message.Types
 import Network.IRC.MessageBus
 import Network.IRC.Util
@@ -76,7 +74,7 @@ data BotConfig = BotConfig
   -- | A list of extra command formatters. Note that these formatters will always be called after the built-in ones.
   , cmdFormatters    :: ![CommandFormatter]
   -- | All the bot configuration so that message handlers can lookup their own specific configs.
-  , config           :: !Config
+  , config           :: !(CF.Configuration)
   }
 
 instance Show BotConfig where
@@ -96,7 +94,7 @@ newBotConfig :: Text       -- ^ server
              -> Int        -- ^ botTimeout
              -> BotConfig
 newBotConfig server port channel botNick botTimeout =
-  BotConfig server port channel botNick botNick botTimeout mempty mempty [] [] CF.empty
+  BotConfig server port channel botNick botNick botTimeout mempty mempty [] [] (CF.fromMap mempty)
 
 -- | The bot.
 data Bot = Bot

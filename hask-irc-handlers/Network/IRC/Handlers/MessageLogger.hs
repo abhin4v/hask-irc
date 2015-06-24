@@ -2,7 +2,6 @@
 
 module Network.IRC.Handlers.MessageLogger (messageLoggerMsgHandlerMaker) where
 
-import qualified Data.Configurator       as CF
 import qualified Data.Text.Format        as TF
 import qualified Data.Text.Format.Params as TF
 
@@ -12,6 +11,7 @@ import System.Directory         (createDirectoryIfMissing, getModificationTime, 
 import System.FilePath          (FilePath, (</>), (<.>))
 import System.IO                (openFile, IOMode(..), hSetBuffering, BufferMode(..))
 
+import qualified Network.IRC.Configuration as CF
 import Network.IRC
 import Network.IRC.Util
 
@@ -28,9 +28,9 @@ messageLoggerMsgHandlerMaker = MsgHandlerMaker "messagelogger" go
 
 getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do
-  logFileDir <- CF.require config "messagelogger.logdir"
-  createDirectoryIfMissing True logFileDir
-  return $ logFileDir </> unpack (botChannel ++ "-" ++ nickToText botNick) <.> "log"
+  let logFileDir = CF.require "messagelogger.logdir" config :: Text
+  createDirectoryIfMissing True (unpack logFileDir)
+  return $ (unpack logFileDir) </> unpack (botChannel ++ "-" ++ nickToText botNick) <.> "log"
 
 openLogFile :: FilePath -> IO Handle
 openLogFile logFilePath = do
