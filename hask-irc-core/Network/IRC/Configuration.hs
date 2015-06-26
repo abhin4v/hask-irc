@@ -14,7 +14,7 @@ module Network.IRC.Configuration
 import qualified ClassyPrelude as P
 
 import ClassyPrelude hiding (lookup)
-import Data.Maybe (fromJust)
+import Data.Maybe           (fromJust)
 
 type Name = Text
 
@@ -64,7 +64,7 @@ data Value = String Text
            | List [Value]
            deriving (Eq, Show)
 
-newtype Configuration = Configuration { configMap :: (Map Name Value) } deriving (Show)
+newtype Configuration = Configuration { configMap :: Map Name Value } deriving (Show)
 
 fromMap :: Map Name Value -> Configuration
 fromMap = Configuration

@@ -13,7 +13,7 @@ import qualified System.Log.Logger as HSL
 import ClassyPrelude
 import Control.Concurrent.Lifted  (threadDelay)
 import Control.Exception.Lifted   (evaluate)
-import Control.Monad.State.Strict (get, put, evalStateT)
+import Control.Monad.State.Strict (get, put)
 import Data.Time                  (addUTCTime)
 import System.IO                  (hIsEOF)
 import System.Timeout             (timeout)
@@ -56,18 +56,17 @@ parseLine botConfig@BotConfig { .. } time line msgParts =
 sendCommandLoop :: MessageChannel Message -> Bot -> IO ()
 sendCommandLoop commandChan bot@Bot { .. } = do
   msg@(Message _ _ cmd) <- receiveMessage commandChan
-  (exs, lines_) <- formatCommand botConfig msg
+  (exs, lines_)         <- formatCommand botConfig msg
 
   forM_ exs $ \(ex :: SomeException) ->
     errorM ("Error while formatting command: " ++ show cmd ++ "\nError: " ++ show ex)
 
-  unless (null lines_) $
+  forM_ lines_ $ \line -> do
     handle (\(e :: SomeException) -> do
               errorM ("Error while writing to connection: " ++ show e)
-              closeMessageChannel commandChan) $
-      forM_ lines_ $ \line -> do
-        TF.hprint botSocket "{}\r\n" $ TF.Only line
-        infoM . unpack $ "> " ++ line
+              closeMessageChannel commandChan) $ do
+      TF.hprint botSocket "{}\r\n" $ TF.Only line
+      infoM . unpack $ "> " ++ line
 
   commandChanClosed <- isClosedMessageChannel commandChan
   unless commandChanClosed $
@@ -76,12 +75,11 @@ sendCommandLoop commandChan bot@Bot { .. } = do
       _            -> sendCommandLoop commandChan bot
 
 readMessageLoop :: MVar BotStatus -> MessageChannel In -> Bot -> Int -> IO ()
-readMessageLoop mvBotStatus inChan Bot { .. } timeoutDelay = evalStateT loop mempty
+readMessageLoop mvBotStatus inChan Bot { .. } timeoutDelay = loop mempty
   where
     msgPartTimeout = 10
 
-    loop = do
-      msgParts  <- get
+    loop msgParts = do
       botStatus <- readMVar mvBotStatus
       case botStatus of
         Disconnected -> io $ closeMessageChannel inChan
@@ -104,25 +102,26 @@ readMessageLoop mvBotStatus inChan Bot { .. } timeoutDelay = evalStateT loop mem
               Right (Just EOS)              -> sendMessage inChan EOD >> return msgParts
 
           limit <- io $ map (addUTCTime (- msgPartTimeout)) getCurrentTime
-          put $ validMsgParts limit msgParts'
-          loop
-      where
-        validMsgParts limit =
-          foldl' (\m (k, v) -> insertWith (++) k [v] m) mempty
-          . concat
-          . filter ((> limit) . msgPartTime . snd . headEx . sortBy (flip $ comparing (msgPartTime . snd)))
-          . groupAllOn (fst &&& msgPartTarget . snd)
-          . asList . concatMap (uncurry (map . (,))) . mapToList
+          loop $ validMsgParts limit msgParts'
 
-        readLine = do
-          eof <- hIsEOF botSocket
-          if eof
-            then return EOS
-            else mask $ \unmask -> do
-              line <- map initEx . unmask $ hGetLine botSocket
-              infoM . unpack $ "< " ++ line
-              now <- getCurrentTime
-              return $ Line now line
+    validMsgParts limit =
+      foldl' (\m (k, v) -> insertWith (++) k [v] m) mempty
+      . concat
+      . filter ((> limit) . msgPartTime . snd . headEx . sortBy (flip $ comparing (msgPartTime . snd)))
+      . groupAllOn (fst &&& msgPartTarget . snd)
+      . asList
+      . concatMap (uncurry (map . (,)))
+      . mapToList
+
+    readLine = do
+      eof <- hIsEOF botSocket
+      if eof
+        then return EOS
+        else mask $ \unmask -> do
+          line <- map initEx . unmask $ hGetLine botSocket
+          infoM . unpack $ "< " ++ line
+          now <- getCurrentTime
+          return $ Line now line
 
 messageProcessLoop :: MessageChannel In -> MessageChannel Message -> IRC ()
 messageProcessLoop inChan messageChan = loop 0
@@ -139,14 +138,13 @@ messageProcessLoop inChan messageChan = loop 0
           then infoM "Timeout" >> return Disconnected
           else do
             when (status == Kicked) $
-              threadDelay (5 * oneSec) >> newMessage JoinCmd >>= sendMessage messageChan
+              threadDelay (5 * oneSec) >> (sendMessage messageChan =<< newMessage JoinCmd)
 
             mIn <- receiveMessage inChan
             case mIn of
               Timeout                  -> do
-                idleMsg <- newMessage IdleMsg
-                sendMessage messageChan idleMsg
-                sendWhoisMessage nick origNick
+                sendMessage messageChan =<< newMessage IdleMsg
+                sendWhoisMessage nick origNick idleFor
                 return Idle
               EOD                      -> infoM "Connection closed" >> return Disconnected
               Msg (msg@Message { .. }) -> do
@@ -162,25 +160,24 @@ messageProcessLoop inChan messageChan = loop 0
         NickAvailable    -> return ()
         _                -> loop 0
 
-      where
-        sendWhoisMessage nick origNick =
-          when (nick /= origNick && idleFor /= 0 && idleFor `mod` (10 * oneSec) == 0) $
-            (newMessage . WhoisCmd . nickToText $ origNick) >>= sendMessage messageChan
+    sendWhoisMessage nick origNick idleFor =
+      when (nick /= origNick && idleFor /= 0 && idleFor `mod` (10 * oneSec) == 0) $
+        sendMessage messageChan =<< (newMessage . WhoisCmd . nickToText $ origNick)
 
-        handleMsg nick origNick message mpass
-          | Just (JoinMsg user)     <- fromMessage message, userNick user == nick =
-              infoM "Joined" >> return Joined
-          | Just (KickMsg { .. })   <- fromMessage message, kickedNick == nick    =
-              infoM "Kicked" >> return Kicked
-          | Just NickInUseMsg       <- fromMessage message                        =
-              infoM "Nick already in use" >> return NickNotAvailable
-          | Just (ModeMsg { .. })   <- fromMessage message, modeUser == Self      = do
-              whenJust mpass $ \pass -> do
-                msg <- newMessage $ PrivMsgReply (User (Nick "NickServ") "") $ "IDENTIFY " ++ pass
-                sendMessage messageChan msg
-              newMessage JoinCmd >>= sendMessage messageChan
-              return Connected
-          | Just (WhoisNoSuchNick n) <- fromMessage message, n == origNick        =
-              infoM "Original nick available" >> return NickAvailable
-          | otherwise                                                             =
-              return Connected
+    handleMsg nick origNick message mpass
+      | Just (JoinMsg user)     <- fromMessage message, userNick user == nick =
+          infoM "Joined" >> return Joined
+      | Just (KickMsg { .. })   <- fromMessage message, kickedNick == nick    =
+          infoM "Kicked" >> return Kicked
+      | Just NickInUseMsg       <- fromMessage message                        =
+          infoM "Nick already in use" >> return NickNotAvailable
+      | Just (ModeMsg { .. })   <- fromMessage message, modeUser == Self      = do
+          whenJust mpass $ \pass -> do
+            msg <- newMessage $ PrivMsgReply (User (Nick "NickServ") "") $ "IDENTIFY " ++ pass
+            sendMessage messageChan msg
+            sendMessage messageChan =<< newMessage JoinCmd
+          return Connected
+      | Just (WhoisNoSuchNickMsg n) <- fromMessage message, n == origNick     =
+          infoM "Original nick available" >> return NickAvailable
+      | otherwise                                                             =
+          return Connected

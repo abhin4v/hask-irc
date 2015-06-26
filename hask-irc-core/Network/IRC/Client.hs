@@ -38,7 +38,7 @@ $(deriveLoggers "HSL" [HSL.DEBUG, HSL.ERROR])
 
 data ConnectionResource = ConnectionResource
   { bot                :: !Bot
-  , botStatus          :: !(MVar BotStatus)
+  , botStatus          :: !(MVar BotStatus) -- TODO: is this really needed
   , inChannel          :: !(MessageChannel In)
   , mainMsgChannel     :: !(MessageChannel Message)
   , handlerMsgChannels :: !(Map MsgHandlerName (MessageChannel Message))
@@ -59,21 +59,27 @@ connect botConfig@BotConfig { .. } = do
   mainMsgChannel   <- newMessageChannel messageBus
 
   msgHandlersChans <- loadMsgHandlers messageBus
-  msgHandlerInfo'  <- foldM (\m (hn, (h, _)) -> getHelp h botConfig >>= \hm -> return $ insertMap hn hm m)
-                        mempty (mapToList msgHandlersChans)
+  msgHandlerInfo'  <- flip (`foldM` mempty) (mapToList msgHandlersChans)
+                      $ \handlerInfo (handlerName, (handler, _)) -> do
+                          handlerHelp <- getHelp handler botConfig
+                          return $ insertMap handlerName handlerHelp handlerInfo
 
   let botConfig'         = botConfig { msgHandlerInfo = msgHandlerInfo'}
   let msgHandlerChannels = map snd msgHandlersChans
   let msgHandlers        = map fst msgHandlersChans
 
-  return $ ConnectionResource
-            (Bot botConfig' socket msgHandlers) mvBotStatus inChannel mainMsgChannel msgHandlerChannels
+  return ConnectionResource { bot                = (Bot botConfig' socket msgHandlers)
+                            , botStatus          = mvBotStatus
+                            , inChannel          = inChannel
+                            , mainMsgChannel     = mainMsgChannel
+                            , handlerMsgChannels = msgHandlerChannels
+                            }
   where
     connectToWithRetry = connectTo (unpack botServer) (PortNumber (fromIntegral botPort))
-                           `catch` (\(e :: SomeException) -> do
-                                      errorM ("Error while connecting: " ++ show e ++ ". Retrying.")
-                                      threadDelay (5 * oneSec)
-                                      connectToWithRetry)
+                         `catch` (\(e :: SomeException) -> do
+                                    errorM ("Error while connecting: " ++ show e ++ ". Retrying.")
+                                    threadDelay (5 * oneSec)
+                                    connectToWithRetry)
 
     mkMsgHandler name messageBus =
       case lookup name msgHandlerMakers of
@@ -119,7 +125,7 @@ runBotIntenal botConfig' = withSocketsDo $ do
   where
     botConfigWithCore = botConfig' {
       msgHandlerInfo =
-        foldl' (\m name -> insertMap name mempty m) mempty
+        foldl' (flip (`insertMap` mempty)) mempty
           (hashNub $ mapKeys (msgHandlerInfo botConfig') ++ mapKeys coreMsgHandlerMakers)
     , msgHandlerMakers = coreMsgHandlerMakers <> msgHandlerMakers botConfig'
     }
@@ -137,15 +143,15 @@ runBotIntenal botConfig' = withSocketsDo $ do
         Just UserInterrupt -> debugM "User interrupt"          >> return Interrupted
         _                  -> debugM ("Exception! " ++ show e) >> return Errored
 
+    -- TODO: handle handler errors?
     runHandler :: BotConfig -> (MsgHandlerName, (MsgHandler, MessageChannel Message)) -> IO ()
-    runHandler botConfig (msgHandlerName, (handler, msgChannel)) = receiveMessage msgChannel >>= go
+    runHandler botConfig (msgHandlerName, (handler, msgChannel)) = go =<< receiveMessage msgChannel
       where
         go msg@Message { .. }
           | Just QuitCmd <- fromMessage message = do
               debugM . unpack $ "Stopping msg handler: " ++ msgHandlerName
               stopMsgHandler handler botConfig
               closeMessageChannel msgChannel
-              return ()
           | otherwise = do
               resps <- handleMessage handler botConfig msg
               forM_ resps $ sendMessage msgChannel
@@ -161,10 +167,12 @@ runBotIntenal botConfig' = withSocketsDo $ do
           sendMessage mainMsgChannel =<< newMessage UserCmd
 
           fork $ sendCommandLoop mainMsgChannel bot
+                 `catch` (\(e :: SomeException) -> errorM $ "Error in sendCommandLoop: " ++ show e)
           fork $ readMessageLoop botStatus inChannel bot oneSec
+                 `catch` (\(e :: SomeException) -> errorM $ "Error in readMessageLoop: " ++ show e)
           forM_ (mapToList . asMap $ mergeMaps msgHandlers handlerMsgChannels) $
             void . fork . runHandler botConfig
-          runIRC bot Connected (messageProcessLoop inChannel mainMsgChannel)
+          runIRC bot Connected $ messageProcessLoop inChannel mainMsgChannel
 
 -- | Creates and runs an IRC bot for given the config. This IO action runs forever.
 runBot :: BotConfig -- ^ The bot config used to create the bot.
@@ -172,14 +180,16 @@ runBot :: BotConfig -- ^ The bot config used to create the bot.
 runBot botConfig = do
   -- setup signal handling
   mainThreadId <- myThreadId
-  installHandler sigINT  (Catch $ throwTo mainThreadId UserInterrupt) Nothing
-  installHandler sigTERM (Catch $ throwTo mainThreadId UserInterrupt) Nothing
+  let interruptMainThread = throwTo mainThreadId UserInterrupt
+  installHandler sigINT  (Catch interruptMainThread) Nothing
+  installHandler sigTERM (Catch interruptMainThread) Nothing
 
   -- setup logging
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
-  stderrHandler <- streamHandler stderr DEBUG >>= \lh -> return $
-                     setFormatter lh $ tfLogFormatter "%F %T" "[$utcTime] $loggername $prio $msg"
+  stderrHandler <- streamHandler stderr DEBUG >>= \logHandler ->
+                     return . setFormatter logHandler $
+                       tfLogFormatter "%F %T" "[$utcTime] $loggername $prio $msg"
   updateGlobalLogger rootLoggerName (setHandlers [stderrHandler] . setLevel DEBUG)
 
   -- run

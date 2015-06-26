@@ -30,7 +30,7 @@ getLogFilePath :: BotConfig -> IO FilePath
 getLogFilePath BotConfig { .. } = do
   let logFileDir = CF.require "messagelogger.logdir" config :: Text
   createDirectoryIfMissing True (unpack logFileDir)
-  return $ (unpack logFileDir) </> unpack (botChannel ++ "-" ++ nickToText botNick) <.> "log"
+  return $ unpack logFileDir </> unpack (botChannel ++ "-" ++ nickToText botNick) <.> "log"
 
 openLogFile :: FilePath -> IO Handle
 openLogFile logFilePath = do

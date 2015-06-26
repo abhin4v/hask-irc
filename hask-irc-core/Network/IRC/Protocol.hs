@@ -14,7 +14,8 @@ pingParser :: MessageParser
 pingParser = MessageParser "ping" go
   where
     go _ time line _
-      | "PING :" `isPrefixOf` line = ParseDone (Message time line . toMessage . PingMsg . drop 6 $ line) []
+      | "PING :" `isPrefixOf` line =
+          flip ParseDone [] . Message time line . toMessage . PingMsg . drop 6 $ line
       | otherwise                  = ParseReject
 
 parseMsgLine :: Text -> ([Text], Text, Text, Text, Text)
@@ -65,7 +66,7 @@ defaultParser = MessageParser "default" go
     go _ time line _
       | "PING :" `isPrefixOf` line = ParseReject
       | otherwise                  =
-          flip ParseDone [] . Message time line $ toMessage $ OtherMsg source command target message
+          flip ParseDone [] . Message time line . toMessage . OtherMsg source command target $ message
       where
         (_, command, source, target, message) = parseMsgLine line
 
@@ -105,11 +106,10 @@ whoisParser = MessageParser "whois" go
 
     parse :: [MessagePart] -> WhoisReplyMsg
     parse myMsgParts =
-      let partMap = asMap $ foldl' (\m MessagePart { .. } ->
-                                      insertMap (words msgPartLine !! 1) msgPartLine m)
-                                   mempty myMsgParts
+      let partMap = asMap $ flip (`foldl'` mempty) myMsgParts $ \m MessagePart { .. } ->
+                              insertMap (words msgPartLine !! 1) msgPartLine m
       in case lookup "401" partMap of
-           Just line -> WhoisNoSuchNick . Nick $ words line !! 3
+           Just line -> WhoisNoSuchNickMsg . Nick $ words line !! 3
            Nothing   -> let
                splits311   = words . fromJust . lookup "311" $ partMap
                nick        = Nick (splits311 !! 3)
@@ -124,7 +124,7 @@ whoisParser = MessageParser "whois" go
                splits312   = words . fromJust . lookup "312" $ partMap
                server      = splits312 !! 4
                serverInfo  = drop 1 . unwords . drop 5 $ splits312
-             in WhoisReplyMsg nick user host realName channels server serverInfo
+             in WhoisNickInfoMsg nick user host realName channels server serverInfo
 
 defaultParsers :: [MessageParser]
 defaultParsers = [pingParser, namesParser, whoisParser, lineParser, defaultParser]

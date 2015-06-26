@@ -129,16 +129,15 @@ data ModeMsg       = ModeMsg { modeUser   :: !User
 instance MessageC ModeMsg
 
 -- | A message received as a response to a 'WhoisCmd'.
-data WhoisReplyMsg = WhoisNoSuchNick { whoisNick :: !Nick }
-                   | WhoisReplyMsg {
-                       whoisNick        :: !Nick
-                     , whoisUser        :: !Text
-                     , whoisHost        :: !Text
-                     , whoisRealName    :: !Text
-                     , whoisChannels    :: ![Text]
-                     , whoisServer      :: !Text
-                     , whoisServerInfo  :: !Text
-                     } deriving (Typeable, Show, Eq, Ord)
+data WhoisReplyMsg = WhoisNoSuchNickMsg { whoisNick :: !Nick }
+                   | WhoisNickInfoMsg { whoisNick        :: !Nick
+                                      , whoisUser        :: !Text
+                                      , whoisHost        :: !Text
+                                      , whoisRealName    :: !Text
+                                      , whoisChannels    :: ![Text]
+                                      , whoisServer      :: !Text
+                                      , whoisServerInfo  :: !Text
+                                      } deriving (Typeable, Show, Eq, Ord)
 instance MessageC WhoisReplyMsg
 
 -- | All other messages which are not parsed as any of the above message types.

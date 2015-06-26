@@ -74,7 +74,7 @@ data BotConfig = BotConfig
   -- | A list of extra command formatters. Note that these formatters will always be called after the built-in ones.
   , cmdFormatters    :: ![CommandFormatter]
   -- | All the bot configuration so that message handlers can lookup their own specific configs.
-  , config           :: !(CF.Configuration)
+  , config           :: !CF.Configuration
   }
 
 instance Show BotConfig where
