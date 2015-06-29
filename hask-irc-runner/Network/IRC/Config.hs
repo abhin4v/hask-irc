@@ -8,6 +8,7 @@ import qualified Data.Ratio as R
 
 import ClassyPrelude
 import Data.Configurator.Types (Configured (..), ConfigError (..), KeyError (..))
+import Prelude                 (read)
 
 import Network.IRC
 import Network.IRC.Configuration
@@ -39,8 +40,8 @@ loadBotConfig :: String -> IO BotConfig
 loadBotConfig configFile = do
   eConfig <- try $ CF.load [CF.Required configFile]
   case eConfig of
-    Left (ParseError _ _) -> error "Error while loading config"
-    Right config          -> do
+    Left (ParseError _ msg) -> error $ "Error while loading config: " ++ msg
+    Right config            -> do
       eBotConfig <- try $ do
         handlers :: [Text] <- CF.require config "msghandlers"
         let handlerInfo    = foldl' (\m h -> insertMap h mempty m) mempty handlers
@@ -53,7 +54,8 @@ loadBotConfig configFile = do
                        CF.require config "port"            <*>
                        CF.require config "channel"         <*>
                        (Nick <$> CF.require config "nick") <*>
-                       CF.require config "timeout"
+                       CF.require config "timeout"         <*>
+                       (read <$> CF.require config "loglevel")
         configMap <- fromConfiguratorConfig config
         return botConfig { msgHandlerInfo   = handlerInfo
                          , msgHandlerMakers = handlerMakers

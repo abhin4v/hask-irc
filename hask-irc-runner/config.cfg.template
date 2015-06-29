@@ -4,7 +4,15 @@ channel = "#testtesttest"
 nick = "haskman"
 password = "xxxsss"
 timeout = 130
-msghandlers = ["greeter", "welcomer", "messagelogger", "songsearch", "auth", "nicktracker", "tell"]
+loglevel = "INFO"
+
+msghandlers = [ "greeter"
+              , "welcomer"
+              , "messagelogger"
+              , "songsearch"
+              , "auth"
+              , "nicktracker"
+              , "tell"]
 
 songsearch {
   tinysong_apikey = "xxxyyyzzz"
