@@ -10,7 +10,7 @@ Portability : POSIX
 
 {-# LANGUAGE TemplateHaskell #-}
 
-module Network.IRC.Client (runBot) where
+module Network.IRC.Client (runBot, Priority (..)) where
 
 import qualified System.Log.Logger as HSL
 
@@ -175,7 +175,7 @@ runBotIntenal botConfig' = withSocketsDo $ do
 -- | Creates and runs an IRC bot for given the config. This IO action runs forever.
 runBot :: BotConfig -- ^ The bot config used to create the bot.
        -> IO ()
-runBot botConfig = do
+runBot botConfig@BotConfig { .. } = do
   -- setup signal handling
   mainThreadId            <- myThreadId
   let interruptMainThread = throwTo mainThreadId UserInterrupt
@@ -185,10 +185,10 @@ runBot botConfig = do
   -- setup logging
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
-  stderrHandler <- streamHandler stderr DEBUG >>= \logHandler ->
+  stderrHandler <- streamHandler stderr botLogLevel >>= \logHandler ->
                      return . setFormatter logHandler $
                        tfLogFormatter "%F %T" "[$utcTime] $loggername $prio $msg"
-  updateGlobalLogger rootLoggerName (setHandlers [stderrHandler] . setLevel DEBUG)
+  updateGlobalLogger rootLoggerName (setHandlers [stderrHandler] . setLevel botLogLevel)
 
   -- run
   runBotIntenal botConfig

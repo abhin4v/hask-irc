@@ -8,6 +8,7 @@ module Network.IRC.Internal.Types where
 import ClassyPrelude
 import Control.Monad.Base         (MonadBase)
 import Control.Monad.State.Strict (StateT, MonadState, execStateT)
+import System.Log.Logger          (Priority)
 
 import qualified Network.IRC.Configuration as CF
 import Network.IRC.Message.Types
@@ -64,6 +65,8 @@ data BotConfig = BotConfig
   -- | The timeout in seconds after which bot automatically disconnects and tries to reconnect.
   -- Should be few seconds more than the ping timeout of the server.
   , botTimeout       :: !Int
+  -- | Log level of the log messages.
+  , botLogLevel      :: Priority
   -- | Info about the message handlers. A map of message handler names to a map of all commands supported
   -- by that message handler to the help text of that command.
   , msgHandlerInfo   :: !(Map MsgHandlerName (Map Text Text))
@@ -92,9 +95,11 @@ newBotConfig :: Text       -- ^ server
              -> Text       -- ^ channel
              -> Nick       -- ^ botNick
              -> Int        -- ^ botTimeout
+             -> Priority   -- ^ botLogLevel
              -> BotConfig
-newBotConfig server port channel botNick botTimeout =
-  BotConfig server port channel botNick botNick botTimeout mempty mempty [] [] (CF.fromMap mempty)
+newBotConfig server port channel botNick botTimeout botLogLevel =
+  BotConfig server port channel botNick botNick botTimeout botLogLevel
+            mempty mempty [] [] (CF.fromMap mempty)
 
 -- | The bot.
 data Bot = Bot
@@ -195,7 +200,7 @@ instance Ord MsgHandlerMaker where
 -- | Handles a message using a given message handler.
 handleMessage :: MsgHandler    -- ^ The message handler.
               -> BotConfig     -- ^ The bot config.
-              -> Message   -- ^ The message to handle.
+              -> Message       -- ^ The message to handle.
               -> IO [Message]  -- ^ A list of commands to be sent to the server.
 handleMessage MsgHandler { .. } botConfig =
   flip runReaderT botConfig . _runMsgHandler . onMessage
