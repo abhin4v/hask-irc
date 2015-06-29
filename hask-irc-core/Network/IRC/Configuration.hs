@@ -1,10 +1,22 @@
+{-|
+Module      : Network.IRC.Client
+Description : Extensible configuration for the IRC bot.
+Copyright   : (c) Abhinav Sarkar, 2014-2015
+License     : Apache-2.0
+Maintainer  : abhinav@abhinavsarkar.net
+Stability   : experimental
+Portability : POSIX
+
+Extensible configuration for the IRC bot.
+-}
+
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, ExistentialQuantification, GADTs #-}
 
 module Network.IRC.Configuration
   ( Name
   , Value (..)
-  , Configuration
   , Configurable (..)
+  , Configuration
   , fromMap
   , lookup
   , require
@@ -16,8 +28,10 @@ import qualified ClassyPrelude as P
 import ClassyPrelude hiding (lookup)
 import Data.Maybe           (fromJust)
 
+-- | Name of a configuration property.
 type Name = Text
 
+-- | Typeclass for the types that can be used as values in 'Configuration'.
 class Configurable a where
   fromValue :: Value -> Maybe a
 
@@ -58,22 +72,31 @@ instance Configurable a => Configurable [a] where
   fromValue   = valueToList
   toValue = listToValue
 
-data Value = String Text
-           | Number Integer
-           | Boolean Bool
-           | List [Value]
+-- | Value of a configuration property.
+data Value = String Text    -- ^ A text value.
+           | Number Integer -- ^ An integer value.
+           | Boolean Bool   -- ^ A boolean value.
+           | List [Value]   -- ^ A list of values as a value.
            deriving (Eq, Show)
 
-newtype Configuration = Configuration { configMap :: Map Name Value } deriving (Show)
+-- | A configuration data which can be used to look up properties.
+newtype Configuration = Configuration { configMap :: Map Name Value } deriving (Show, Eq)
 
+-- | Creates a 'Configuration' from a map of 'Name's to 'Value's.
 fromMap :: Map Name Value -> Configuration
 fromMap = Configuration
 
+-- | Looks up a property in the 'Configuration' by the given 'Name'.
+--   Returns 'Nothing' if the property is not found or is of wrong type.
 lookup :: (Configurable a) => Name -> Configuration -> Maybe a
 lookup name Configuration {..} = join . map fromValue $ P.lookup name configMap
 
+-- | Looks up a property in the 'Configuration' by the given 'Name'.
+--   Fails with an error if the property is not found or is of wrong type.
 require :: (Configurable a) => Name -> Configuration -> a
 require n = fromJust . lookup n
 
+-- | Looks up a property in the 'Configuration' by the given 'Name'.
+--   Returns the given default if the property is not found or is of wrong type.
 lookupDefault :: (Configurable a) => Name -> Configuration -> a -> a
 lookupDefault n c v = fromMaybe v $ lookup n c

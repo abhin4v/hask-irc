@@ -1,11 +1,13 @@
 {-|
 Module      : Network.IRC.Client
 Description : The IRC bot client used to create and run a bot.
-Copyright   : (c) Abhinav Sarkar, 2014
+Copyright   : (c) Abhinav Sarkar, 2014-2015
 License     : Apache-2.0
 Maintainer  : abhinav@abhinavsarkar.net
 Stability   : experimental
 Portability : POSIX
+
+The IRC bot client used to create and run a bot.
 -}
 
 {-# LANGUAGE TemplateHaskell #-}

@@ -1,7 +1,7 @@
 {-|
 Module      : Network.IRC.Types
 Description : Types for the IRC bot and the message handlers.
-Copyright   : (c) Abhinav Sarkar, 2014
+Copyright   : (c) Abhinav Sarkar, 2014-2015
 License     : Apache-2.0
 Maintainer  : abhinav@abhinavsarkar.net
 Stability   : experimental
