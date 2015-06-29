@@ -175,7 +175,7 @@ messageProcessLoop inChan messageChan = loop 0
           whenJust mpass $ \pass -> do
             msg <- newMessage $ PrivMsgReply (User (Nick "NickServ") "") $ "IDENTIFY " ++ pass
             sendMessage messageChan msg
-            sendMessage messageChan =<< newMessage JoinCmd
+          sendMessage messageChan =<< newMessage JoinCmd
           return Connected
       | Just (WhoisNoSuchNickMsg n) <- fromMessage message, n == origNick     =
           infoM "Original nick available" >> return NickAvailable
