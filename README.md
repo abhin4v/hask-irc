@@ -1,6 +1,7 @@
 #Hircarra
 
 > hircarra (plural hircarras)
+> 
 > (historical, India) A messenger, especially one who delivers a personal message.
 
 Hircarra is a Haskell library to write [IRC][1] bots. It is meant to be very easy to use and completely extensible. It provides a core on which users can add support for their own IRC messages and replies and handlers. It also comes with a set of handlers (in the hircarra-handlers package) which provide a varied set of functionalities.
@@ -73,23 +74,24 @@ GHCi, version 7.8.3: http://www.haskell.org/ghc/  :? for help
 Loading package ghc-prim ... linking ... done.
 Loading package integer-gmp ... linking ... done.
 Loading package base ... linking ... done.
-Prelude> :m +Data.Map
-Prelude Data.Map> :m +Network.IRC
-Prelude Data.Map Network.IRC> :set +m
-Prelude Data.Map Network.IRC> :set -XOverloadedStrings
-Prelude Data.Map Network.IRC> let echoHandler = MsgHandlerMaker "echo" $ \ _ _ -> return $ newMsgHandler {
-Prelude Data.Map Network.IRC|   onMessage = \ Message { message = message } ->
-Prelude Data.Map Network.IRC|     case fromMessage message of
-Prelude Data.Map Network.IRC|       Just (ChannelMsg _ msg) -> do
-Prelude Data.Map Network.IRC|         reply <- newMessage (ChannelMsgReply msg)
-Prelude Data.Map Network.IRC|         return [reply]
-Prelude Data.Map Network.IRC|       _ -> return []
-Prelude Data.Map Network.IRC| }
-Prelude Data.Map Network.IRC|
-Prelude Data.Map Network.IRC> let botConfig = newBotConfig "irc.freenode.net" 6667 "#hircarra" (Nick "hibot") 130 DEBUG
-Prelude Data.Map Network.IRC> let botConfigWithHandler = botConfig { msgHandlerMakers = singleton "echo" echoHandler, msgHandlerInfo = singleton "echo" empty }
-Prelude Data.Map Network.IRC|
-Prelude Data.Map Network.IRC> runBot botConfigWithHandler
+Prelude> :set prompt  "λ: "
+λ> :m +Data.Map
+λ> :m +Network.IRC
+λ> :set +m
+λ> :set -XOverloadedStrings
+λ> let echoHandler = MsgHandlerMaker "echo" $ \ _ _ -> return $ newMsgHandler {
+λ|   onMessage = \ Message { message = message } ->
+λ|     case fromMessage message of
+λ|       Just (ChannelMsg _ msg) -> do
+λ|         reply <- newMessage (ChannelMsgReply msg)
+λ|         return [reply]
+λ|       _ -> return []
+λ| }
+λ|
+λ> let botConfig = newBotConfig "irc.freenode.net" 6667 "#hircarra" (Nick "hibot") 130 DEBUG
+λ> let botConfigWithHandler = botConfig { msgHandlerMakers = singleton "echo" echoHandler, msgHandlerInfo = singleton "echo" empty }
+λ|
+λ> runBot botConfigWithHandler
 [2015-06-29 18:28:43] Network.IRC.Client DEBUG Connecting ...
 [2015-06-29 18:28:43] Network.IRC.Client DEBUG Connected
 [2015-06-29 18:28:43] Network.IRC.Client DEBUG Loading msg handler: echo
@@ -131,16 +133,13 @@ handlers = ["echo","help","pingpong"] }
 
 Here is how the conversation looked in an IRC client:
 
-> [23:58:56] 	hibot (~hibot@106.51.139.38) joined the channel
-> 
-> [23:58:59]  <@abh>	test test
-> 
-> [23:59:00]  <hibot>	test test
-> 
-> [23:59:05]  <@abh>	repeater
-> 
-> [23:59:06]  <hibot>	repeater
-> 
-> [23:59:11] 	hibot (~hibot@106.51.139.38) left IRC (Client Quit)
+```
+[23:58:56] 	hibot (~hibot@106.51.139.38) joined the channel
+[23:58:59]  <@abh>	test test
+[23:59:00]  <hibot>	test test
+[23:59:05]  <@abh>	repeater
+[23:59:06]  <hibot>	repeater
+[23:59:11] 	hibot (~hibot@106.51.139.38) left IRC (Client Quit)
+```
 
 [1]: https://en.wikipedia.org/wiki/Irc
