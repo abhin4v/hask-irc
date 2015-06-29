@@ -61,7 +61,7 @@ sendCommandLoop commandChan bot@Bot { .. } = do
   forM_ exs $ \(ex :: SomeException) ->
     errorM ("Error while formatting command: " ++ show cmd ++ "\nError: " ++ show ex)
 
-  forM_ lines_ $ \line -> do
+  forM_ lines_ $ \line ->
     handle (\(e :: SomeException) -> do
               errorM ("Error while writing to connection: " ++ show e)
               closeMessageChannel commandChan) $ do
