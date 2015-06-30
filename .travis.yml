@@ -25,15 +25,15 @@ before_install:
     fi
   - $CABAL update
   - $CABAL sandbox init
-  - cd hask-irc-core
-  - $CABAL sandbox init --sandbox=../.cabal-sandbox
-  - cd ../hask-irc-handlers
-  - $CABAL sandbox init --sandbox=../.cabal-sandbox
-  - $CABAL sandbox add-source ../hask-irc-core/
-  - cd ../hask-irc-runner
-  - $CABAL sandbox init --sandbox=../.cabal-sandbox
-  - $CABAL sandbox add-source ../hask-irc-core/
-  - $CABAL sandbox add-source ../hask-irc-handlers/
+  - cd hask-irc-core;
+    $CABAL sandbox init --sandbox=../.cabal-sandbox;
+    cd ../hask-irc-handlers;
+    $CABAL sandbox init --sandbox=../.cabal-sandbox;
+    $CABAL sandbox add-source ../hask-irc-core/;
+    cd ../hask-irc-runner;
+    $CABAL sandbox init --sandbox=../.cabal-sandbox;
+    $CABAL sandbox add-source ../hask-irc-core/;
+    $CABAL sandbox add-source ../hask-irc-handlers/;
 
 install:
   - $CABAL install --dependencies-only
@@ -42,13 +42,42 @@ script:
   - $CABAL build
 
   # tests that a source-distribution can be generated
-  - cabal sdist
+  - cd ../hask-irc-core;
+    $CABAL sdist;
 
   # check that the generated source-distribution can be built & installed
-  - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
+  - export SRC_TGZ=$($CABAL info . | awk '{print $2 ".tar.gz";exit}') ;
     cd dist/;
     if [ -f "$SRC_TGZ" ]; then
-       cabal install --force-reinstalls "$SRC_TGZ";
+       $CABAL install --force-reinstalls "$SRC_TGZ";
+    else
+       echo "expected '$SRC_TGZ' not found";
+       exit 1;
+    fi
+
+  # tests that a source-distribution can be generated
+  - cd ../hask-irc-handlers;
+    $CABAL sdist;
+
+  # check that the generated source-distribution can be built & installed
+  - export SRC_TGZ=$($CABAL info . | awk '{print $2 ".tar.gz";exit}') ;
+    cd dist/;
+    if [ -f "$SRC_TGZ" ]; then
+       $CABAL install --force-reinstalls "$SRC_TGZ";
+    else
+       echo "expected '$SRC_TGZ' not found";
+       exit 1;
+    fi
+
+  # tests that a source-distribution can be generated
+  - cd ../hask-irc-runner;
+    $CABAL sdist;
+
+  # check that the generated source-distribution can be built & installed
+  - export SRC_TGZ=$($CABAL info . | awk '{print $2 ".tar.gz";exit}') ;
+    cd dist/;
+    if [ -f "$SRC_TGZ" ]; then
+       $CABAL install --force-reinstalls "$SRC_TGZ";
     else
        echo "expected '$SRC_TGZ' not found";
        exit 1;

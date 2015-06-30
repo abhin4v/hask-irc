@@ -24,7 +24,7 @@ homepage:            https://github.com/abhin4v/hask-irc
 -- The license under which the package is released.
 license:             Apache-2.0
 
-license-file:        ../LICENSE
+license-file:        LICENSE
 
 -- The package author(s).
 author:              Abhinav Sarkar
@@ -52,7 +52,7 @@ executable hask-irc
   main-is:             Main.hs
 
   -- Modules included in this executable, other than Main.
-  -- other-modules:
+  other-modules:       Network.IRC.Config
 
   -- LANGUAGE extensions used by modules in this package.
   default-extensions:  NoImplicitPrelude, OverloadedStrings, RecordWildCards, ScopedTypeVariables,

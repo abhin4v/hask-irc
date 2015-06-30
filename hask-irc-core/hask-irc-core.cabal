@@ -25,7 +25,7 @@ homepage:            https://github.com/abhin4v/hask-irc
 license:             Apache-2.0
 
 -- The file containing the license text.
-license-file:        ../LICENSE
+license-file:        LICENSE
 
 -- The package author(s).
 author:              Abhinav Sarkar
