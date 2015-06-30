@@ -53,7 +53,7 @@ library
                        BangPatterns, TupleSections, NamedFieldPuns, GeneralizedNewtypeDeriving,
                        DeriveDataTypeable, Trustworthy
 
-  build-depends:       base                 >=4.5     && <4.8,
+  build-depends:       base                 >=4.5     && <4.9,
                        classy-prelude       >=0.10    && <1.0,
                        convertible          >=1.1     && <1.2,
                        hslogger             >=1.2     && <1.3,

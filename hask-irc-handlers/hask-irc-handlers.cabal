@@ -53,7 +53,7 @@ library
                        BangPatterns, TupleSections, NamedFieldPuns, GeneralizedNewtypeDeriving,
                        DeriveDataTypeable
 
-  build-depends:       base                 >=4.5     && <4.8,
+  build-depends:       base                 >=4.5     && <4.9,
                        hask-irc-core        ==0.1.0,
                        acid-state           >=0.12    && <0.13,
                        aeson                >=0.7     && <0.8,
