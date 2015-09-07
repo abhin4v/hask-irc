@@ -1,7 +1,9 @@
 #Hircarra
 
+[![Build Status](https://travis-ci.org/abhin4v/hask-irc.svg?branch=master)](https://travis-ci.org/abhin4v/hask-irc)
+
 > hircarra (plural hircarras)
-> 
+>
 > (historical, India) A messenger, especially one who delivers a personal message.
 
 Hircarra is a Haskell library to write [IRC][1] bots. It is meant to be very easy to use and completely extensible. It provides a core on which users can add support for their own IRC messages and replies and handlers. It also comes with a set of handlers (in the hircarra-handlers package) which provide a varied set of functionalities.
@@ -69,7 +71,7 @@ Core features:
 Let's write a simple echo handler:
 
 ```
-$ ghci -package-db=./.cabal-sandbox/x86_64-osx-ghc-7.8.3-packages.conf.d            
+$ ghci -package-db=./.cabal-sandbox/x86_64-osx-ghc-7.8.3-packages.conf.d
 GHCi, version 7.8.3: http://www.haskell.org/ghc/  :? for help
 Loading package ghc-prim ... linking ... done.
 Loading package integer-gmp ... linking ... done.
@@ -83,13 +85,15 @@ Prelude> :set prompt  "λ: "
 λ|   onMessage = \ Message { message = message } ->
 λ|     case fromMessage message of
 λ|       Just (ChannelMsg _ msg) -> do
-λ|         reply <- newMessage (ChannelMsgReply msg)
+λ|         reply <- newMessage $ ChannelMsgReply msg
 λ|         return [reply]
 λ|       _ -> return []
 λ| }
 λ|
 λ> let botConfig = newBotConfig "irc.freenode.net" 6667 "#hircarra" (Nick "hibot") 130 DEBUG
-λ> let botConfigWithHandler = botConfig { msgHandlerMakers = singleton "echo" echoHandler, msgHandlerInfo = singleton "echo" empty }
+λ> let botConfigWithHandler = botConfig {
+                                msgHandlerMakers = singleton "echo" echoHandler,
+                                msgHandlerInfo = singleton "echo" empty }
 λ|
 λ> runBot botConfigWithHandler
 [2015-06-29 18:28:43] Network.IRC.Client DEBUG Connecting ...
@@ -134,12 +138,12 @@ handlers = ["echo","help","pingpong"] }
 Here is how the conversation looked in an IRC client:
 
 ```
-[23:58:56] 	hibot (~hibot@106.51.139.38) joined the channel
-[23:58:59]  <@abh>	test test
-[23:59:00]  <hibot>	test test
-[23:59:05]  <@abh>	repeater
-[23:59:06]  <hibot>	repeater
-[23:59:11] 	hibot (~hibot@106.51.139.38) left IRC (Client Quit)
+[18:28:56] 	hibot (~hibot@106.51.139.38) joined the channel
+[18:28:59]  <@abh>	test test
+[18:29:00]  <hibot>	test test
+[18:29:05]  <@abh>	repeater
+[18:29:06]  <hibot>	repeater
+[18:29:11] 	hibot (~hibot@106.51.139.38) left IRC (Client Quit)
 ```
 
 [1]: https://en.wikipedia.org/wiki/Irc
