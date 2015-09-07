@@ -3,6 +3,7 @@
 *.iml
 .cabal-sandbox
 cabal.sandbox.config
+.stack-work
 .idea
 dist
 config.cfg

@@ -1,0 +1,11 @@
+flags: {}
+packages:
+- hask-irc-core/
+- hask-irc-handlers/
+- hask-irc-runner/
+extra-deps:
+- curl-aeson-0.0.4
+- hslogger-template-2.0.3
+- ixset-1.0.6
+- syb-with-class-0.6.1.6
+resolver: lts-3.4
