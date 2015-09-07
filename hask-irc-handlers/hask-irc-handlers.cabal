@@ -55,13 +55,13 @@ library
 
   build-depends:       base                 >=4.5     && <4.9,
                        hask-irc-core        ==0.1.0,
-                       acid-state           >=0.12    && <0.13,
-                       aeson                >=0.7     && <0.8,
+                       acid-state           >=0.12    && <0.14,
+                       aeson                >=0.7     && <0.10,
                        classy-prelude       >=0.10    && <1.0,
                        convertible          >=1.1     && <1.2,
                        curl-aeson           >=0.0.3   && <0.1,
                        directory            >=1.2     && <1.3,
-                       filepath             >=1.3     && <1.4,
+                       filepath             >=1.3     && <1.5,
                        hslogger             >=1.2     && <1.3,
                        hslogger-template    >=2.0     && <2.1,
                        HTTP                 >=4000    && <5000,
@@ -69,9 +69,9 @@ library
                        lifted-base          >=0.2     && <0.3,
                        mtl                  >=2.1     && <2.3,
                        safecopy             >=0.8     && <0.9,
-                       text                 >=1.1     && <1.2,
+                       text                 >=1.1     && <1.3,
                        text-format          >=0.3     && <0.4,
-                       time                 >=1.4     && <1.5,
+                       time                 >=1.4     && <1.6,
                        uuid                 >=1.3     && <1.4
 
   exposed-modules:     Network.IRC.Handlers,

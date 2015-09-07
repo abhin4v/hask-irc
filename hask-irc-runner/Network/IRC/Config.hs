@@ -14,10 +14,6 @@ import Network.IRC
 import Network.IRC.Configuration
 import Network.IRC.Handlers
 
-instance Configured a => Configured [a] where
-  convert (CFT.List xs) = Just . mapMaybe convert $ xs
-  convert _ = Nothing
-
 instance Configurable CFT.Value where
   fromValue (String a)  = Just $ CFT.String a
   fromValue (Number a)  = Just $ CFT.Number (a R.% 1)

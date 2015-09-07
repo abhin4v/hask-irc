@@ -10,7 +10,7 @@ Portability : POSIX
 The IRC bot client used to create and run a bot.
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, TypeFamilies #-}
 
 module Network.IRC.Client (runBot, Priority (..)) where
 
