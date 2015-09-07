@@ -1,14 +1,8 @@
 language: haskell
 
 env:
-  - CABALVER=1.18 GHCVER=7.6.3
   - CABALVER=1.18 GHCVER=7.8.4
   - CABALVER=1.22 GHCVER=7.10.2
-  - CABALVER=head GHCVER=head
-
-matrix:
-  allow_failures:
-    - env: GHCVER=head
 
 before_install:
   - |
@@ -49,11 +43,12 @@ script:
   - export SRC_TGZ=$($CABAL info . | awk '{print $2 ".tar.gz";exit}') ;
     cd dist/;
     if [ -f "$SRC_TGZ" ]; then
-       $CABAL install --force-reinstalls "$SRC_TGZ";
+       $CABAL install "$SRC_TGZ";
     else
        echo "expected '$SRC_TGZ' not found";
        exit 1;
-    fi
+    fi;
+    cd ..;
 
   # tests that a source-distribution can be generated
   - cd ../hask-irc-handlers;
@@ -63,11 +58,12 @@ script:
   - export SRC_TGZ=$($CABAL info . | awk '{print $2 ".tar.gz";exit}') ;
     cd dist/;
     if [ -f "$SRC_TGZ" ]; then
-       $CABAL install --force-reinstalls "$SRC_TGZ";
+       $CABAL install "$SRC_TGZ";
     else
        echo "expected '$SRC_TGZ' not found";
        exit 1;
-    fi
+    fi;
+    cd ..;
 
   # tests that a source-distribution can be generated
   - cd ../hask-irc-runner;
@@ -77,7 +73,7 @@ script:
   - export SRC_TGZ=$($CABAL info . | awk '{print $2 ".tar.gz";exit}') ;
     cd dist/;
     if [ -f "$SRC_TGZ" ]; then
-       $CABAL install --force-reinstalls "$SRC_TGZ";
+       $CABAL install "$SRC_TGZ";
     else
        echo "expected '$SRC_TGZ' not found";
        exit 1;
