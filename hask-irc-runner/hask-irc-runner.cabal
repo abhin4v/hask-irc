@@ -64,7 +64,7 @@ executable hask-irc
                        hask-irc-core        ==0.1.0,
                        hask-irc-handlers    ==0.1.0,
                        classy-prelude       >=0.10    && <1.0,
-                       configurator         >=0.2     && <0.4
+                       configurator         >=0.3     && <0.4
 
   -- Directories containing source files.
   -- hs-source-dirs:
